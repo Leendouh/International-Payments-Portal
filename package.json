@@ -1,0 +1,37 @@
+{
+  "name": "international-payments-portal",
+  "version": "1.0.0",
+  "description": "International Payments Portal - Enterprise-grade secure payment processing system",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install && npm run install:backend && npm run install:frontend",
+    "install:backend": "cd backend && npm install",
+    "install:frontend": "cd frontend && npm install",
+    "test:security": "python3 scripts/check_owasp_compliance.py && python3 scripts/check_security_headers.py",
+    "validate:security": "powershell -File scripts/validate_pipeline.ps1",
+    "pipeline:validate": "npm run validate:security"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Leendouh/International-Payments-Portal.git"
+  },
+  "keywords": [
+    "payments",
+    "security",
+    "nodejs",
+    "express",
+    "react",
+    "typescript",
+    "ssl",
+    "devsecops"
+  ],
+  "author": "Security Development Team",
+  "license": "MIT"
+}

@@ -43,6 +43,7 @@ check_authorization {
     (input.request.method == "POST" and input.user.role in ["admin", "user"]) or
     (input.request.method in ["PUT", "DELETE"] and input.user.role == "admin")
 }
+}
 
 # Input validation security checks
 check_input_validation {
