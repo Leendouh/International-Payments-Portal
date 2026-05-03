@@ -202,3 +202,7 @@ storybook-static/
 
 # Semantic release
 .releaserc.json
+
+# Pipeline validation reports
+pipeline-validation-report.json
+reports/validation/
