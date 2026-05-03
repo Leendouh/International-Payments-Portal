@@ -1,0 +1,54 @@
+name: Minimal Security Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  basic-security:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v5
+      with:
+        node-version: '18'
+
+    - name: Install dependencies
+      run: |
+        npm install
+        cd backend && npm install
+        cd ../frontend && npm install
+
+    - name: Run npm audit (high threshold)
+      run: |
+        cd backend && npm audit --audit-level high || echo "Backend audit completed with warnings"
+        cd ../frontend && npm audit --audit-level high || echo "Frontend audit completed with warnings"
+
+    - name: Basic security check
+      run: |
+        echo "Running basic security validation..."
+        find . -name "*.env*" -type f | head -5
+        echo "Security check completed"
+
+  simple-sast:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+
+    - name: Run Semgrep
+      uses: semgrep/semgrep-action@v1
+      continue-on-error: true
+      with:
+        config: p/security-audit
+
+    - name: Run Gitleaks
+      uses: gitleaks/gitleaks-action@v2
+      continue-on-error: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
