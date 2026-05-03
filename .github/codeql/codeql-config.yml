@@ -1,0 +1,118 @@
+# CodeQL Configuration for Enhanced Security Analysis
+
+name: "Security Analysis for International Payments Portal"
+
+# Paths to include in analysis
+paths:
+  - backend
+  - frontend
+  - shared
+
+# Paths to exclude from analysis
+paths-ignore:
+  - '**/test/**'
+  - '**/tests/**'
+  - '**/node_modules/**'
+  - '**/dist/**'
+  - '**/build/**'
+  - '**/coverage/**'
+  - '**/.git/**'
+  - '**/docs/**'
+
+# Language-specific configuration
+languages:
+  javascript:
+    # Extractor options for JavaScript
+    extractor:
+      # Enable automatic dependency extraction
+      auto-dependencies: true
+      
+      # Additional options for Node.js
+      javascript:
+        # Enable analysis of require() calls
+        analyze_require: true
+        
+        # Enable analysis of import statements
+        analyze_import: true
+        
+        # Enable analysis of prototype pollution
+        analyze_prototype_pollution: true
+        
+        # Enable analysis of eval usage
+        analyze_eval: true
+        
+        # Enable analysis of regular expression denial of service
+        analyze_redos: true
+
+# Query packs to use
+query-packs:
+  # Security queries
+  - name: security-extended
+    version: latest
+  - name: security-and-quality
+    version: latest
+  
+  # JavaScript-specific security queries
+  - name: javascript-security-and-quality
+    version: latest
+
+# Custom queries
+queries:
+  # Custom security queries for payment processing
+  - uses: ./custom-queries/payment-security
+  - uses: ./custom-queries/crypto-security
+  - uses: ./custom-queries/input-validation
+
+# Additional security checks
+security-extended:
+  # Enable experimental security queries
+  experimental: true
+  
+  # Enable queries for common vulnerabilities
+  enable:
+    - js/sql-injection
+    - js/xss
+    - js/path-traversal
+    - js/command-injection
+    - js/unsafe-deserialization
+    - js/cryptographic-issues
+    - js/insecure-randomness
+    - js/hardcoded-secrets
+    - js/weak-cryptography
+    - js/insecure-storage
+    - js/insufficient-entropy
+
+# Quality checks
+quality:
+  # Enable code quality queries
+  enable:
+    - js/complexity
+    - js/duplicate-code
+    - js/dead-code
+    - js/maintainability
+    - js/performance
+
+# Reporting configuration
+reporting:
+  # Generate detailed reports
+  detailed: true
+  
+  # Include code snippets in reports
+  include-snippets: true
+  
+  # Severity levels to report
+  severity:
+    - error
+    - warning
+    - recommendation
+
+# Performance optimization
+performance:
+  # Enable parallel processing
+  parallel: true
+  
+  # Memory limit for analysis
+  memory-limit: 8GB
+  
+  # Timeout for analysis
+  timeout: 2h
