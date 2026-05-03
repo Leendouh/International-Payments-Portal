@@ -38,8 +38,24 @@ function Write-Error {
 function Test-Command {
     param([string]$Command)
     try {
-        Get-Command $Command -ErrorAction Stop | Out-Null
-        return $true
+        # Try to get the command with different methods
+        $cmd = Get-Command $Command -ErrorAction SilentlyContinue
+        if ($cmd) {
+            return $true
+        }
+        
+        # For Docker, also check if the service is running
+        if ($Command -eq "docker") {
+            try {
+                docker --version >$null 2>&1
+                return $LASTEXITCODE -eq 0
+            }
+            catch {
+                return $false
+            }
+        }
+        
+        return $false
     }
     catch {
         return $false
@@ -151,42 +167,71 @@ function Validate-Pipeline {
     # 4. Test Python scripts
     Write-Status "Testing Python validation scripts..."
     
-    if (Test-Command "python") {
+    # Find working Python command
+    $pythonCmd = $null
+    if (Get-Command "python3" -ErrorAction SilentlyContinue) {
+        $pythonCmd = "python3"
+    }
+    elseif (Get-Command "py" -ErrorAction SilentlyContinue) {
+        $pythonCmd = "py"
+    }
+    elseif (Get-Command "python" -ErrorAction SilentlyContinue) {
+        # Test if python actually works (not just Microsoft Store redirect)
+        try {
+            $result = & python --version 2>&1
+            if ($LASTEXITCODE -eq 0 -and $result -notmatch "Microsoft Store") {
+                $pythonCmd = "python"
+            }
+        }
+        catch {
+            $pythonCmd = $null
+        }
+    }
+    
+    if ($pythonCmd) {
+        Write-Status "Testing Python validation scripts with: $pythonCmd"
+        
         # Test OWASP compliance checker
         $totalChecks++
         try {
-            $result = python scripts\check_owasp_compliance.py 2>&1
+            $result = & $pythonCmd scripts\check_owasp_compliance.py 2>&1
             if ($LASTEXITCODE -eq 0) {
                 Write-Success "OWASP compliance checker works"
                 $passedChecks++
             }
             else {
-                Write-Error "OWASP compliance checker failed"
+                Write-Warning "OWASP compliance checker failed (may need Python 3.8+ or missing dependencies)"
                 $failedChecks++
             }
         }
         catch {
-            Write-Error "OWASP compliance checker failed: $_"
+            Write-Warning "OWASP compliance checker failed: $_"
             $failedChecks++
         }
         
         # Test security headers checker
         $totalChecks++
         try {
-            $result = python scripts\check_security_headers.py --help 2>&1
+            $result = & $pythonCmd scripts\check_security_headers.py --help 2>&1
             if ($LASTEXITCODE -eq 0) {
                 Write-Success "Security headers checker works"
                 $passedChecks++
             }
             else {
-                Write-Error "Security headers checker failed"
+                Write-Warning "Security headers checker failed (may need Python 3.8+ or missing dependencies)"
                 $failedChecks++
             }
         }
         catch {
-            Write-Error "Security headers checker failed: $_"
+            Write-Warning "Security headers checker failed: $_"
             $failedChecks++
         }
+    }
+    else {
+        Write-Warning "Python not found or not working - skipping Python script validation"
+        Write-Warning "Install Python 3.8+ from python.org for full validation"
+        $totalChecks += 2
+        $failedChecks += 2
     }
     
     # 5. Test Docker build
