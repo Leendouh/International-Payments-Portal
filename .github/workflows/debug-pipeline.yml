@@ -1,0 +1,90 @@
+name: Debug Pipeline Components
+
+on:
+  workflow_dispatch:  # Manual trigger for debugging
+  push:
+    branches: [ debug ]
+
+jobs:
+  debug-tools:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+
+    - name: Check available tools
+      run: |
+        echo "=== Checking available tools ==="
+        which node && node --version
+        which npm && npm --version
+        which python3 && python3 --version
+        which docker && docker --version
+        echo "=== Tool check complete ==="
+
+    - name: Test basic npm commands
+      run: |
+        echo "=== Testing npm ==="
+        npm --version
+        npm config get cache
+        echo "=== npm test complete ==="
+
+  debug-files:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+
+    - name: Check file structure
+      run: |
+        echo "=== File structure ==="
+        ls -la
+        echo "=== Backend files ==="
+        ls -la backend/ || echo "Backend directory not found"
+        echo "=== Frontend files ==="
+        ls -la frontend/ || echo "Frontend directory not found"
+        echo "=== Scripts ==="
+        ls -la scripts/
+        echo "=== Policies ==="
+        ls -la policies/
+        echo "=== File check complete ==="
+
+    - name: Check package files
+      run: |
+        echo "=== Package files ==="
+        find . -name "package*.json" -type f
+        find . -name "package-lock.json" -type f
+        echo "=== Package file check complete ==="
+
+  debug-python:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+
+    - name: Test Python scripts
+      run: |
+        echo "=== Testing Python ==="
+        python3 --version
+        echo "=== Testing script existence ==="
+        ls -la scripts/
+        echo "=== Testing script execution ==="
+        python3 scripts/aggregate_security_results.py || echo "Script failed but that's expected"
+        echo "=== Python test complete ==="
+
+  debug-opa:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+
+    - name: Test OPA policy
+      run: |
+        echo "=== Testing OPA ==="
+        ls -la policies/
+        echo "=== Installing conftest ==="
+        curl -L https://github.com/open-policy-agent/conftest/releases/latest/download/conftest_Linux_x86_64.tar.gz | tar xz
+        sudo mv conftest /usr/local/bin
+        conftest --version
+        echo "=== Testing policy syntax ==="
+        conftest verify --policy policies/ docker-compose.yml || echo "Policy test failed"
+        echo "=== OPA test complete ==="
