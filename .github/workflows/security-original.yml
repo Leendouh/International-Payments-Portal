@@ -1,0 +1,348 @@
+name: DevSecOps Security Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  NODE_VERSION: '18'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Static Code Analysis & Security Scanning
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+      with:
+        fetch-depth: 0
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v5
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        echo "Installing dependencies..."
+        npm install || echo "Root npm install failed, continuing..."
+        echo "Installing backend dependencies..."
+        cd backend && npm install --no-audit --no-fund || echo "Backend install had issues, continuing..."
+        cd ../frontend && npm install --no-audit --no-fund || echo "Frontend install had issues, continuing..."
+
+    # Dependency Vulnerability Scanning
+    - name: Run npm audit
+      run: |
+        cd backend && npm audit --audit-level high
+        cd ../frontend && npm audit --audit-level high
+
+    # SAST with CodeQL
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v4
+      with:
+        languages: javascript
+        config-file: ./.github/codeql/codeql-config.yml
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v4
+
+    # SAST with Semgrep
+    - name: Run Semgrep
+      uses: semgrep/semgrep-action@v1
+      with:
+        config: >-
+          p/security-audit
+          p/secrets
+          p/nodejs
+          p/owasp-top-ten
+
+    # Secret Scanning
+    - name: Run Gitleaks
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+    # SAST with SonarCloud
+    - name: SonarCloud Scan
+      uses: SonarSource/sonarcloud-github-action@master
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  # Container Security & Image Scanning
+  container-security:
+    runs-on: ubuntu-latest
+    needs: security-scan
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and test backend Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./backend
+        push: false
+        load: true
+        tags: test-backend:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Run Trivy vulnerability scanner on backend
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: test-backend:latest
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+    - name: Build and push production image
+      if: github.ref == 'refs/heads/main'
+      uses: docker/build-push-action@v5
+      with:
+        context: ./backend
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  # Dynamic Application Security Testing (DAST)
+  dast-testing:
+    runs-on: ubuntu-latest
+    needs: container-security
+    if: github.ref == 'refs/heads/main'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+
+    - name: Start application for DAST
+      run: |
+        docker-compose -f docker-compose.test.yml up -d
+        sleep 30
+
+    - name: Run OWASP ZAP Baseline Scan
+      uses: zaproxy/action-baseline@v0.10.0
+      with:
+        target: 'http://localhost:8443'
+        rules_file_name: '.zap/rules.tsv'
+        cmd_options: '-a -j'
+
+    - name: Run Nuclei Vulnerability Scanner
+      uses: projectdiscovery/nuclei-action@v2
+      with:
+        target: 'http://localhost:8443'
+        templates: 'cves/,vulnerabilities/,misconfiguration/'
+        output: 'nuclei-results.txt'
+
+    - name: Upload Nuclei results
+      uses: actions/upload-artifact@v4
+      with:
+        name: nuclei-results
+        path: nuclei-results.txt
+
+    - name: Cleanup test environment
+      if: always()
+      run: |
+        docker-compose -f docker-compose.test.yml down -v
+
+  # Infrastructure as Code Security
+  iac-security:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+
+    - name: Create reports directory
+      run: mkdir -p reports
+
+    - name: Run Checkov on IaC files
+      uses: bridgecrewio/checkov-action@master
+      continue-on-error: true
+      with:
+        directory: ./infrastructure
+        framework: dockerfile,kubernetes,terraform
+        output_format: sarif
+        output_file_path: 'reports/checkov-results.sarif'
+        soft_fail: true
+
+    - name: Upload Checkov results
+      if: hashFiles('reports/checkov-results.sarif') != ''
+      uses: github/codeql-action/upload-sarif@v4
+      with:
+        sarif_file: 'reports/checkov-results.sarif'
+
+    - name: Run tfsec on Terraform files
+      uses: aquasecurity/tfsec-action@v1.0.3
+      with:
+        directory: ./infrastructure/terraform
+        soft_fail: true
+
+  # Compliance & Policy Checking
+  compliance-check:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+
+    - name: Run OPA Conftest
+      uses: instrumenta/conftest-action@master
+      with:
+        files: docker-compose.yml
+        policy: ./policies
+        namespace: main
+
+    - name: Check OWASP Compliance
+      run: |
+        echo "Checking OWASP ASVS Level 2 compliance..."
+        python3 scripts/check_owasp_compliance.py
+
+    - name: Security Headers Check
+      run: |
+        echo "Checking security headers configuration..."
+        python3 scripts/check_security_headers.py
+
+  # Performance & Load Testing
+  performance-testing:
+    runs-on: ubuntu-latest
+    needs: container-security
+    if: github.ref == 'refs/heads/main'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+
+    - name: Start application
+      run: |
+        docker-compose -f docker-compose.test.yml up -d
+        sleep 30
+
+    - name: Run K6 Load Test
+      uses: grafana/k6-action@v0.3.1
+      with:
+        filename: tests/performance/load-test.js
+
+    - name: Run Artillery Load Test
+      run: |
+        npm install -g artillery
+        artillery run tests/performance/artillery-config.yml
+
+    - name: Cleanup test environment
+      if: always()
+      run: |
+        docker-compose -f docker-compose.test.yml down -v
+
+  # Security Monitoring & Alerting
+  security-monitoring:
+    runs-on: ubuntu-latest
+    needs: [security-scan, container-security, dast-testing]
+    if: always()
+    steps:
+    - name: Aggregate security results
+      run: |
+        echo "Aggregating security scan results..."
+        python3 scripts/aggregate_security_results.py || echo "Aggregation failed - creating basic report"
+        echo "Creating basic security report if needed..."
+        echo '{"timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'", "status": "basic", "scans": {}}' > security-report.json
+
+    - name: Create security report
+      run: |
+        echo "Creating security report..."
+        python3 scripts/generate_security_report.py || echo "Report generation failed - using basic report"
+        ls -la security-report.json comprehensive-security-report.json || echo "Reports not found"
+
+    - name: Send security notification
+      if: failure() && secrets.SLACK_WEBHOOK_URL != ''
+      uses: 8398a7/action-slack@v3
+      with:
+        status: failure
+        channel: '#security-alerts'
+        text: 'Security pipeline failed! Check the logs for details.'
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+
+    - name: Update security dashboard
+      run: |
+        curl -X POST "${{ secrets.SECURITY_DASHBOARD_URL }}" \
+          -H "Authorization: Bearer ${{ secrets.SECURITY_DASHBOARD_TOKEN }}" \
+          -H "Content-Type: application/json" \
+          -d @security-report.json
+
+  # Deployment to Staging with Security Gates
+  deploy-staging:
+    runs-on: ubuntu-latest
+    needs: [security-scan, container-security, compliance-check]
+    if: github.ref == 'refs/heads/develop'
+    environment: staging
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+
+    - name: Deploy to staging
+      run: |
+        echo "Deploying to staging environment..."
+        # Deployment script here
+        kubectl apply -f k8s/staging/ -n staging
+
+    - name: Run smoke tests
+      run: |
+        npm run test:staging
+
+    - name: Run security validation on staging
+      run: |
+        python3 scripts/validate_staging_security.py
+
+  # Production Deployment with Security Gates
+  deploy-production:
+    runs-on: ubuntu-latest
+    needs: [security-scan, container-security, dast-testing, compliance-check, performance-testing]
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+
+    - name: Deploy to production
+      run: |
+        echo "Deploying to production environment..."
+        # Blue-green deployment script
+        kubectl apply -f k8s/production/ -n production
+
+    - name: Run production health checks
+      run: |
+        npm run test:production
+
+    - name: Update security monitoring
+      run: |
+        curl -X POST "${{ secrets.SECURITY_MONITORING_URL }}" \
+          -H "Authorization: Bearer ${{ secrets.SECURITY_MONITORING_TOKEN }}" \
+          -H "Content-Type: application/json" \
+          -d '{"event": "deployment", "environment": "production", "status": "success"}'
