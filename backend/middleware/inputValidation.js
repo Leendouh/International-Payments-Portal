@@ -1,9 +1,15 @@
 const { body, validationResult } = require('express-validator');
 const { auditLog } = require('../utils/logger');
+const { 
+  validateInput, 
+  validateMultipleInputs, 
+  schemas,
+  createValidationMiddleware 
+} = require('../utils/inputWhitelist');
 
 /**
- * Input Validation Middleware
- * Implements whitelist validation with RegEx patterns as per Task 1 requirements
+ * Enhanced Input Validation Middleware
+ * Implements comprehensive whitelist validation with extensive RegEx patterns
  */
 
 // South African ID number validation (Luhn algorithm)
@@ -30,49 +36,56 @@ const validateSAId = (idNumber) => {
   return sum % 10 === 0;
 };
 
-// Validation chains for different endpoints
+// Enhanced validation chains using comprehensive whitelisting
 const registrationValidation = [
-  // Full name validation - letters, spaces, hyphens, apostrophes only
-  body('fullName')
-    .trim()
-    .isLength({ min: 2, max: 100 })
-    .withMessage('Full name must be between 2 and 100 characters')
-    .matches(/^[a-zA-Z\s\-']+$/)
-    .withMessage('Full name can only contain letters, spaces, hyphens, and apostrophes'),
+  // Enhanced full name validation with whitelist
+  body('fullName').custom((value) => {
+    const validation = validateInput(value, 'fullName');
+    if (!validation.isValid) {
+      throw new Error(validation.error);
+    }
+    return true;
+  }),
   
-  // South African ID number validation
-  body('idNumber')
-    .trim()
-    .isLength({ min: 13, max: 13 })
-    .withMessage('ID number must be exactly 13 digits')
-    .isNumeric()
-    .withMessage('ID number must contain only digits')
-    .custom(validateSAId)
-    .withMessage('Invalid South African ID number'),
+  // Enhanced email validation with whitelist
+  body('email').custom((value) => {
+    const validation = validateInput(value, 'email');
+    if (!validation.isValid) {
+      throw new Error(validation.error);
+    }
+    return true;
+  }),
   
-  // Account number validation - numeric only, 6-16 digits
-  body('accountNumber')
-    .trim()
-    .isLength({ min: 6, max: 16 })
-    .withMessage('Account number must be between 6 and 16 digits')
-    .isNumeric()
-    .withMessage('Account number must contain only digits'),
+  // Enhanced ID number validation with whitelist and SA ID validation
+  body('idNumber').custom((value) => {
+    const validation = validateInput(value, 'idNumber');
+    if (!validation.isValid) {
+      throw new Error(validation.error);
+    }
+    // Additional SA ID validation for 13-digit IDs
+    if (value.length === 13 && !validateSAId(value)) {
+      throw new Error('Invalid South African ID number - failed Luhn algorithm check');
+    }
+    return true;
+  }),
   
-  // Email validation
-  body('email')
-    .trim()
-    .isEmail()
-    .withMessage('Invalid email address')
-    .normalizeEmail()
-    .isLength({ max: 255 })
-    .withMessage('Email address too long'),
+  // Enhanced account number validation with whitelist
+  body('accountNumber').custom((value) => {
+    const validation = validateInput(value, 'accountNumber');
+    if (!validation.isValid) {
+      throw new Error(validation.error);
+    }
+    return true;
+  }),
   
-  // Password validation - minimum 12 characters with complexity requirements
-  body('password')
-    .isLength({ min: 12 })
-    .withMessage('Password must be at least 12 characters long')
-    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
-    .withMessage('Password must contain at least one uppercase letter, one lowercase letter, one digit, and one special character'),
+  // Enhanced password validation with whitelist
+  body('password').custom((value) => {
+    const validation = validateInput(value, 'password');
+    if (!validation.isValid) {
+      throw new Error(validation.error);
+    }
+    return true;
+  }),
   
   // Password confirmation
   body('confirmPassword')
@@ -85,63 +98,99 @@ const registrationValidation = [
 ];
 
 const loginValidation = [
-  // Email validation
-  body('email')
-    .trim()
-    .isEmail()
-    .withMessage('Invalid email address')
-    .normalizeEmail(),
+  // Enhanced email validation with whitelist
+  body('email').custom((value) => {
+    const validation = validateInput(value, 'email');
+    if (!validation.isValid) {
+      throw new Error(validation.error);
+    }
+    return true;
+  }),
   
-  // Account number validation
-  body('accountNumber')
-    .trim()
-    .isLength({ min: 6, max: 16 })
-    .withMessage('Account number must be between 6 and 16 digits')
-    .isNumeric()
-    .withMessage('Account number must contain only digits'),
+  // Enhanced account number validation with whitelist
+  body('accountNumber').custom((value) => {
+    const validation = validateInput(value, 'accountNumber');
+    if (!validation.isValid) {
+      throw new Error(validation.error);
+    }
+    return true;
+  }),
   
-  // Password validation
-  body('password')
-    .notEmpty()
-    .withMessage('Password is required')
+  // Enhanced password validation with whitelist
+  body('password').custom((value) => {
+    const validation = validateInput(value, 'password');
+    if (!validation.isValid) {
+      throw new Error(validation.error);
+    }
+    return true;
+  })
 ];
 
+// Enhanced payment validation with comprehensive whitelisting
 const paymentValidation = [
-  // Amount validation - numeric with two decimal places
-  body('amount')
-    .isDecimal({ decimal_digits: '1,2' })
-    .withMessage('Amount must be a valid decimal number with up to 2 decimal places')
-    .isFloat({ min: 0.01, max: 1000000 })
-    .withMessage('Amount must be between 0.01 and 1,000,000'),
+  // Enhanced amount validation with whitelist
+  body('amount').custom((value) => {
+    const validation = validateInput(value.toString(), 'amount');
+    if (!validation.isValid) {
+      throw new Error(validation.error);
+    }
+    return true;
+  }),
   
-  // Currency validation - whitelist specific currencies
-  body('currency')
-    .trim()
-    .isIn(['ZAR', 'USD', 'EUR', 'GBP'])
-    .withMessage('Currency must be one of: ZAR, USD, EUR, GBP'),
+  // Enhanced currency validation with whitelist
+  body('currency').custom((value) => {
+    const validation = validateInput(value, 'currency');
+    if (!validation.isValid) {
+      throw new Error(validation.error);
+    }
+    return true;
+  }),
   
-  // Provider validation - only SWIFT for now
-  body('provider')
-    .trim()
-    .isIn(['SWIFT'])
-    .withMessage('Provider must be SWIFT'),
+  // Enhanced SWIFT/BIC validation with whitelist
+  body('swiftBic').custom((value) => {
+    const validation = validateInput(value, 'swiftBic');
+    if (!validation.isValid) {
+      throw new Error(validation.error);
+    }
+    return true;
+  }),
   
-  // SWIFT/BIC code validation - 8 or 11 alphanumeric characters
-  body('swiftBic')
-    .trim()
-    .isLength({ min: 8, max: 11 })
-    .withMessage('SWIFT/BIC code must be 8 or 11 characters')
-    .matches(/^[A-Z0-9]+$/)
-    .withMessage('SWIFT/BIC code can only contain uppercase letters and numbers'),
+  // Enhanced recipient account validation with whitelist
+  body('recipientAccount').custom((value) => {
+    const validation = validateInput(value, 'recipientAccount');
+    if (!validation.isValid) {
+      throw new Error(validation.error);
+    }
+    return true;
+  }),
   
-  // Recipient account validation
-  body('recipientAccount')
-    .trim()
-    .isLength({ min: 1, max: 50 })
-    .withMessage('Recipient account must be between 1 and 50 characters')
-    .matches(/^[A-Za-z0-9\s\-]+$/)
-    .withMessage('Recipient account can only contain letters, numbers, spaces, and hyphens')
+  // Enhanced description validation with whitelist
+  body('description').optional().custom((value) => {
+    if (value) {
+      const validation = validateInput(value, 'description');
+      if (!validation.isValid) {
+        throw new Error(validation.error);
+      }
+    }
+    return true;
+  })
 ];
+
+// New comprehensive validation middleware using schemas
+const enhancedRegistrationValidation = createValidationMiddleware(schemas.registration);
+const enhancedLoginValidation = createValidationMiddleware(schemas.login);
+const enhancedPaymentValidation = createValidationMiddleware(schemas.payment);
+
+// Input sanitization middleware
+const sanitizeInput = (req, res, next) => {
+  if (req.body) {
+    const validation = validateMultipleInputs(req.body, {});
+    if (validation.sanitizedInputs) {
+      req.body = validation.sanitizedInputs;
+    }
+  }
+  next();
+};
 
 // Generic validation error handler
 const handleValidationErrors = (req, res, next) => {
@@ -167,6 +216,21 @@ const handleValidationErrors = (req, res, next) => {
   }
   
   next();
+};
+
+module.exports = {
+  registrationValidation,
+  loginValidation,
+  paymentValidation,
+  enhancedRegistrationValidation,
+  enhancedLoginValidation,
+  enhancedPaymentValidation,
+  sanitizeInput,
+  validateSAId,
+  handleValidationErrors,
+  schemas,
+  validateInput,
+  validateMultipleInputs
 };
 
 // Custom validator for SWIFT/BIC codes (optional enhanced validation)
