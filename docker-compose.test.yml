@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  backend-test:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8443:8443"
+    environment:
+      - NODE_ENV=test
+      - PORT=8443
+      - DB_HOST=database-test
+      - DB_PORT=5432
+      - DB_NAME=payments_test
+      - DB_USER=test_user
+      - DB_PASSWORD=test_password
+      - JWT_SECRET=test_jwt_secret_for_testing_only
+      - CORS_ORIGIN=http://localhost:3000
+    depends_on:
+      - database-test
+    volumes:
+      - ./ssl:/etc/ssl:ro
+      - ./logs:/app/logs
+    networks:
+      - test-network
+    restart: "no"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-k", "https://localhost:8443/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  database-test:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=payments_test
+      - POSTGRES_USER=test_user
+      - POSTGRES_PASSWORD=test_password
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+      - ./database/init-test:/docker-entrypoint-initdb.d:ro
+    networks:
+      - test-network
+    restart: "no"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user -d payments_test"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis-test:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --requirepass test_redis_password
+    volumes:
+      - redis_test_data:/data
+    networks:
+      - test-network
+    restart: "no"
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 5s
+      timeout: 2s
+      retries: 3
+
+volumes:
+  postgres_test_data:
+    driver: local
+  redis_test_data:
+    driver: local
+
+networks:
+  test-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16

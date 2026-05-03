@@ -211,6 +211,7 @@ jobs:
       with:
         files: docker-compose.yml
         policy: ./policies
+        namespace: main
 
     - name: Check OWASP Compliance
       run: |
