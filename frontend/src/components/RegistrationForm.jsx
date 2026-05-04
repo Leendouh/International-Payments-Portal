@@ -220,8 +220,19 @@ const RegistrationForm = () => {
               id="confirmPassword"
               {...register('confirmPassword', {
                 required: 'Please confirm your password',
-                validate: (value) => value === password || 'Passwords do not match',
+                validate: (value) => {
+                  const passwordValue = watch('password');
+                  console.log('Password:', passwordValue, 'Confirm:', value);
+                  if (!passwordValue) return 'Please enter a password first';
+                  if (value !== passwordValue) return 'Passwords do not match';
+                  return true;
+                },
               })}
+              onBlur={() => {
+                const passwordValue = watch('password');
+                const confirmValue = document.getElementById('confirmPassword').value;
+                console.log('Blur - Password:', passwordValue, 'Confirm:', confirmValue);
+              }}
               className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                 errors.confirmPassword ? 'border-red-500' : 'border-gray-300'
               }`}

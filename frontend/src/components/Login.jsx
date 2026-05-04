@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useFieldValidation } from '../hooks/useFieldValidation';
 import { EmailInput, PasswordInput, AccountInput } from './ui/FormInput';
-import { AuthError, SuccessMessage, InfoMessage } from './ui/ErrorMessage';
-import { AlertCircle, Shield, Eye, EyeOff, LogIn, UserPlus } from 'lucide-react';
+import { AuthError, SuccessMessage, InfoMessage, ValidationError } from './ui/ErrorMessage';
+import { AlertCircle, Shield, Eye, EyeOff, LogIn, UserPlus, Loader2 } from 'lucide-react';
 import Footer from './Footer';
 
 const Login = () => {
@@ -20,6 +21,17 @@ const Login = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  
+  // Real-time field validation
+  const {
+    fieldErrors: realtimeErrors,
+    validatingFields,
+    validateField,
+    clearFieldError,
+    getFieldError,
+    isFieldValidating,
+    isFieldValid
+  } = useFieldValidation();
 
   // Show success message if redirected from registration
   React.useEffect(() => {
@@ -36,8 +48,31 @@ const Login = () => {
       ...prev,
       [name]: value
     }));
+    
+    // Clear real-time error when user starts typing
+    if (realtimeErrors[name]) {
+      clearFieldError(name);
+    }
+    
     // Clear error when user starts typing
     if (error) setError('');
+  };
+
+  // Real-time validation on blur (when user leaves field)
+  const handleFieldBlur = async (fieldName) => {
+    const value = formData[fieldName];
+    
+    // Don't validate empty fields (unless required)
+    if (!value || value.trim().length === 0) {
+      return;
+    }
+
+    // Map login field names to validation service names
+    const validationFieldName = fieldName === 'email' ? 'loginEmail' : 
+                               fieldName === 'password' ? 'loginPassword' : 
+                               fieldName;
+
+    await validateField(validationFieldName, value);
   };
 
   const handleSubmit = async (e) => {
@@ -106,42 +141,78 @@ const Login = () => {
             />
 
             {/* Email Input */}
-            <EmailInput
-              id="email"
-              name="email"
-              label="Email Address"
-              value={formData.email}
-              onChange={handleChange}
-              required
-              placeholder="you@example.com"
-              disabled={loading}
-            />
+            <div className="relative">
+              <EmailInput
+                id="email"
+                name="email"
+                label="Email Address"
+                value={formData.email}
+                onChange={handleChange}
+                onBlur={() => handleFieldBlur('loginEmail')}
+                required
+                placeholder="you@example.com"
+                disabled={loading}
+                error={getFieldError('loginEmail')}
+              />
+              {isFieldValidating('loginEmail') && (
+                <div className="absolute right-3 top-9">
+                  <Loader2 size={16} className="animate-spin text-primary-500" />
+                </div>
+              )}
+              {getFieldError('loginEmail') && (
+                <ValidationError message={getFieldError('loginEmail')} />
+              )}
+            </div>
 
             {/* Password Input */}
-            <PasswordInput
-              id="password"
-              name="password"
-              label="Password"
-              value={formData.password}
-              onChange={handleChange}
-              required
-              placeholder="Enter your password"
-              disabled={loading}
-              showPasswordToggle
-            />
+            <div className="relative">
+              <PasswordInput
+                id="password"
+                name="password"
+                label="Password"
+                value={formData.password}
+                onChange={handleChange}
+                onBlur={() => handleFieldBlur('loginPassword')}
+                required
+                placeholder="Enter your password"
+                disabled={loading}
+                error={getFieldError('loginPassword')}
+                showPasswordToggle
+              />
+              {isFieldValidating('loginPassword') && (
+                <div className="absolute right-12 top-9">
+                  <Loader2 size={16} className="animate-spin text-primary-500" />
+                </div>
+              )}
+              {getFieldError('loginPassword') && (
+                <ValidationError message={getFieldError('loginPassword')} />
+              )}
+            </div>
 
             {/* Account Number Input */}
-            <AccountInput
-              id="accountNumber"
-              name="accountNumber"
-              label="Account Number"
-              value={formData.accountNumber}
-              onChange={handleChange}
-              required
-              placeholder="1234567890"
-              disabled={loading}
-              helperText="Enter your 6-16 digit account number"
-            />
+            <div className="relative">
+              <AccountInput
+                id="accountNumber"
+                name="accountNumber"
+                label="Account Number"
+                value={formData.accountNumber}
+                onChange={handleChange}
+                onBlur={() => handleFieldBlur('accountNumber')}
+                required
+                placeholder="1234567890"
+                disabled={loading}
+                error={getFieldError('accountNumber')}
+                helperText="Enter your 8-12 digit account number"
+              />
+              {isFieldValidating('accountNumber') && (
+                <div className="absolute right-3 top-9">
+                  <Loader2 size={16} className="animate-spin text-primary-500" />
+                </div>
+              )}
+              {getFieldError('accountNumber') && (
+                <ValidationError message={getFieldError('accountNumber')} />
+              )}
+            </div>
 
             {/* Submit Button */}
             <button

@@ -2,30 +2,52 @@ const express = require('express');
 const { body } = require('express-validator');
 const { 
   registrationValidation, 
-  loginValidation, 
+  loginValidation,
   handleValidationErrors 
 } = require('../middleware/inputValidation');
 const { 
-  authLimiter, 
-  registrationLimiter 
-} = require('../middleware/rateLimiter');
-const { 
-  csrfProtection, 
-  csrfToken 
-} = require('../middleware/csrf');
-const { 
-  generateToken, 
-  generateSessionId,
-  authenticateSession,
+  authenticateSession, 
+  authenticateToken,
   requireAuth 
 } = require('../middleware/auth');
+const { 
+  generalLimiter, 
+  authLimiter, 
+  registrationLimiter, 
+  paymentLimiter, 
+  passwordResetLimiter 
+} = require('../middleware/rateLimiter');
+const { csrfProtection, csrfToken } = require('../middleware/csrf');
+const { auditLog } = require('../utils/logger');
+const db = require('../utils/database');
+const { 
+  emitLoginSuccess, 
+  emitRegistrationSuccess, 
+  emitLogout, 
+  emitSessionExpired,
+  emitSecurityAlert 
+} = require('../utils/websocket');
 const { 
   hashPassword, 
   verifyPassword,
   hashIdNumber,
-  hashAccountNumber 
+  hashAccountNumber,
+  hashWithSalt 
 } = require('../utils/hash');
-const { auditLog } = require('../utils/logger');
+const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+
+// Generate JWT token
+const generateToken = (payload) => {
+  return jwt.sign(payload, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRES_IN || '24h'
+  });
+};
+
+// Generate session ID
+const generateSessionId = () => {
+  return crypto.randomBytes(32).toString('hex');
+};
 const { 
   validatePassword,
   generateSecurePassword,
@@ -58,6 +80,7 @@ router.post('/register',
   registrationValidation,
   handleValidationErrors,
   async (req, res) => {
+    console.log('Registration request body:', req.body);
     const { fullName, idNumber, accountNumber, email, password } = req.body;
 
     try {
@@ -139,24 +162,19 @@ router.post('/register',
         fullName: newCustomer.full_name
       });
 
-      // Create session
-      const sessionId = generateSessionId();
-      const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000); // 8 hours
+      // Emit real-time registration success
+      emitRegistrationSuccess(newCustomer.id, {
+        id: newCustomer.id,
+        fullName: newCustomer.full_name,
+        email: newCustomer.email
+      });
 
-      await db.query(
-        `INSERT INTO user_sessions 
-         (session_id, customer_id, ip_address, user_agent, expires_at)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [sessionId, newCustomer.id, req.ip, req.get('User-Agent'), expiresAt]
-      );
-
-      // Set secure session cookie
-      res.cookie('sessionId', sessionId, {
+      // Set JWT token in secure cookie
+      res.cookie('token', token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
-        maxAge: 8 * 60 * 60 * 1000, // 8 hours
-        path: '/'
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
       });
 
       res.status(201).json({
@@ -166,8 +184,7 @@ router.post('/register',
           fullName: newCustomer.full_name,
           email: newCustomer.email
         },
-        token,
-        sessionId
+        token
       });
 
     } catch (error) {
@@ -379,24 +396,19 @@ router.post('/login',
         fullName: customer.full_name
       });
 
-      // Create new session (session fixation prevention)
-      const sessionId = generateSessionId();
-      const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000); // 8 hours
+      // Emit real-time login success
+      emitLoginSuccess(customer.id, {
+        id: customer.id,
+        fullName: customer.full_name,
+        email: customer.email
+      });
 
-      await db.query(
-        `INSERT INTO user_sessions 
-         (session_id, customer_id, ip_address, user_agent, expires_at)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [sessionId, customer.id, req.ip, req.get('User-Agent'), expiresAt]
-      );
-
-      // Set secure session cookie
-      res.cookie('sessionId', sessionId, {
+      // Set JWT token in secure cookie
+      res.cookie('token', token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
-        maxAge: 8 * 60 * 60 * 1000, // 8 hours
-        path: '/'
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
       });
 
       res.json({
@@ -406,8 +418,7 @@ router.post('/login',
           fullName: customer.full_name,
           email: customer.email
         },
-        token,
-        sessionId
+        token
       });
 
     } catch (error) {
@@ -425,7 +436,125 @@ router.post('/login',
   }
 );
 
-// POST /api/logout - Customer logout
+// POST /api/auth/validate/email - Validate email in real-time
+router.post('/validate/email', async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({
+        error: 'Email is required'
+      });
+    }
+
+    // Basic email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        error: 'Invalid email format'
+      });
+    }
+
+    // Check if email already exists
+    const existingUser = await db.query(
+      'SELECT id FROM customers WHERE email = $1',
+      [email.toLowerCase()]
+    );
+
+    if (existingUser.rows.length > 0) {
+      return res.status(409).json({
+        error: 'Email already exists'
+      });
+    }
+
+    res.json({ valid: true });
+  } catch (error) {
+    console.error('Email validation error:', error);
+    res.status(500).json({
+      error: 'Validation failed'
+    });
+  }
+});
+
+// POST /api/auth/validate/idnumber - Validate RSA ID number in real-time
+router.post('/validate/idnumber', async (req, res) => {
+  try {
+    const { idNumber } = req.body;
+    
+    if (!idNumber) {
+      return res.status(400).json({
+        error: 'ID number is required'
+      });
+    }
+
+    // Basic RSA ID validation (13 digits)
+    if (!/^\d{13}$/.test(idNumber)) {
+      return res.status(400).json({
+        error: 'Invalid ID number format'
+      });
+    }
+
+    // Check if ID number already exists
+    const existingUser = await db.query(
+      'SELECT id FROM customers WHERE id_number_hash = $1',
+      [hashWithSalt(idNumber, 'fixed_salt').hash]
+    );
+
+    if (existingUser.rows.length > 0) {
+      return res.status(409).json({
+        error: 'ID number already exists'
+      });
+    }
+
+    res.json({ valid: true });
+  } catch (error) {
+    console.error('ID number validation error:', error);
+    res.status(500).json({
+      error: 'Validation failed'
+    });
+  }
+});
+
+// POST /api/auth/validate/accountnumber - Validate account number in real-time
+router.post('/validate/accountnumber', async (req, res) => {
+  try {
+    const { accountNumber } = req.body;
+    
+    if (!accountNumber) {
+      return res.status(400).json({
+        error: 'Account number is required'
+      });
+    }
+
+    // Basic account number validation (10-12 digits)
+    if (!/^\d{10,12}$/.test(accountNumber)) {
+      return res.status(400).json({
+        error: 'Invalid account number format'
+      });
+    }
+
+    // Check if account number already exists
+    const existingUser = await db.query(
+      'SELECT id FROM customers WHERE account_number_hash = $1',
+      [hashWithSalt(accountNumber, 'fixed_salt').hash]
+    );
+
+    if (existingUser.rows.length > 0) {
+      return res.status(409).json({
+        error: 'Account number already exists'
+      });
+    }
+
+    res.json({ valid: true });
+  } catch (error) {
+    console.error('Account number validation error:', error);
+    res.status(500).json({
+      error: 'Validation failed'
+    });
+  }
+});
+
+// POST /api/auth/logout - Customer logout
 router.post('/logout',
   requireAuth,
   csrfProtection,
@@ -445,13 +574,16 @@ router.post('/logout',
         sessionId: req.session?.id
       });
 
-      // Clear session cookie
-      res.clearCookie('sessionId', {
+      // Clear JWT cookie
+      res.clearCookie('token', {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
         path: '/'
       });
+
+      // Emit real-time logout
+      emitLogout(req.user.id);
 
       res.json({
         message: 'Logout successful'

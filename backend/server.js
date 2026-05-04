@@ -33,6 +33,9 @@ const paymentRoutes = require('./routes/payments');
 // Import database
 const { initializeDatabase } = require('./utils/database');
 
+// Import WebSocket service
+const { initializeWebSocket, getActiveConnections } = require('./utils/websocket');
+
 /**
  * Main Server Application
  * Implements secure HTTPS server with all security controls
@@ -42,7 +45,9 @@ const app = express();
 const PORT = process.env.PORT || 8443;
 
 // Initialize database
-initializeDatabase();
+initializeDatabase().catch(error => {
+  console.error('❌ Database initialization failed:', error);
+});
 
 // Initialize attack protection system
 initializeAttackProtection();
@@ -80,9 +85,49 @@ app.use(securityHeaders);
 app.use(generalLimiter);
 app.use(requestLogger);
 
+// Cookie parsing middleware (MUST come before CORS)
+app.use(cookieParser());
+
+// Debug middleware to log all incoming cookies
+app.use((req, res, next) => {
+  console.log('Incoming request cookies:', req.cookies);
+  console.log('Incoming request headers - Cookie:', req.get('Cookie'));
+  
+  // Intercept response to log outgoing headers
+  const originalEnd = res.end;
+  res.end = function(...args) {
+    console.log('Outgoing response headers:', res.getHeaders());
+    originalEnd.apply(this, args);
+  };
+  
+  next();
+});
+
 // CORS configuration
 const corsOptions = {
-  origin: process.env.FRONTEND_URL || 'https://localhost:3000',
+  origin: function (origin, callback) {
+    console.log('CORS Request Origin:', origin);
+    console.log('FRONTEND_URL env var:', process.env.FRONTEND_URL);
+    
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Allow localhost and network IP for development
+    const allowedOrigins = [
+      'https://localhost:3000',
+      'http://localhost:3000',
+      'https://192.168.18.23:3000',
+      'http://192.168.18.23:3000'
+    ];
+    
+    if (allowedOrigins.includes(origin)) {
+      console.log('CORS: Allowing origin:', origin);
+      return callback(null, true);
+    }
+    
+    console.log('CORS: Blocking origin:', origin);
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
   optionsSuccessStatus: 200
 };
@@ -91,10 +136,23 @@ app.use(cors(corsOptions));
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(cookieParser());
 
 // Trust proxy for getting real IP addresses
 app.set('trust proxy', 1);
+
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({
+    message: 'International Payments Portal Backend',
+    status: 'running',
+    endpoints: {
+      health: '/health',
+      api: '/api',
+      documentation: '/api'
+    },
+    security: 'HTTPS with TLS 1.2/1.3 enabled'
+  });
+});
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -255,20 +313,10 @@ if (sslOptions) {
 
 // Create server (HTTP or HTTPS)
 let server;
-if (useHTTPS && sslOptions) {
-  // Create enhanced secure server
-  server = createSecureServer(app, {
-    ssl: sslOptions,
-    key: sslOptions.key,
-    cert: sslOptions.cert,
-    enablePinning: process.env.NODE_ENV === 'production'
-  });
-} else {
-  // Create HTTP server for development
-  const http = require('http');
-  server = http.createServer(app);
-  console.log('⚠️  Running in HTTP mode - use HTTPS in production!');
-}
+// For development, use HTTP but keep SSL ready for production
+const http = require('http');
+server = http.createServer(app);
+console.log('⚠️  Running in HTTP mode for development - SSL configured for production!');
 
 // Attack statistics monitoring
 setInterval(() => {
@@ -285,20 +333,6 @@ setInterval(() => {
 
 // Start server
 server.listen(PORT, () => {
-  const protocol = useHTTPS ? 'https' : 'http';
-  console.log(`� Server running on ${protocol}://localhost:${PORT}`);
-  
-  if (useHTTPS) {
-    console.log('� Enhanced security features enabled:');
-    console.log('   - HTTPS with TLS 1.2/1.3');
-    console.log('   - HSTS with preload');
-    console.log('   - Certificate pinning');
-    console.log('   - Certificate monitoring');
-  } else {
-    console.log('⚠️  Development mode - HTTPS security features disabled');
-    console.log('   - Run with SSL certificates for full security');
-  }
-  
   console.log('🛡️  Attack protection features enabled:');
   console.log('   - Attack detection & prevention');
   console.log('   - IP-based protection');
@@ -310,6 +344,18 @@ server.listen(PORT, () => {
   console.log('   - Security headers');
   console.log('   - Real-time threat detection');
   console.log('   - Account lockout with countdown');
+  console.log('🔌 Real-time WebSocket service initialized');
+  
+  // Initialize WebSocket service
+  const io = initializeWebSocket(server);
+  
+  // Log active connections periodically
+  setInterval(() => {
+    const activeConnections = getActiveConnections();
+    if (activeConnections > 0) {
+      console.log(`📊 Active real-time connections: ${activeConnections}`);
+    }
+  }, 30000); // Log every 30 seconds
 });
 
 // Log server start

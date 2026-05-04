@@ -87,15 +87,7 @@ const registrationValidation = [
     return true;
   }),
   
-  // Password confirmation
-  body('confirmPassword')
-    .custom((value, { req }) => {
-      if (value !== req.body.password) {
-        throw new Error('Password confirmation does not match');
-      }
-      return true;
-    })
-];
+  ];
 
 const loginValidation = [
   // Enhanced email validation with whitelist
@@ -203,6 +195,8 @@ const handleValidationErrors = (req, res, next) => {
       value: error.value
     }));
     
+    console.log('Validation errors:', errorDetails);
+    
     auditLog('INPUT_VALIDATION_FAILED', req.user?.id, req.ip, req.get('User-Agent'), {
       endpoint: req.path,
       method: req.method,
@@ -210,7 +204,8 @@ const handleValidationErrors = (req, res, next) => {
     });
     
     return res.status(400).json({
-      error: 'Input validation failed',
+      error: 'Validation failed',
+      code: 'VALIDATION_ERROR',
       details: errorDetails
     });
   }

@@ -73,7 +73,7 @@ const ErrorMessage = ({
 export const ValidationError = ({ field, message, className = '' }) => (
   <ErrorMessage
     type="error"
-    message={`${field}: ${message}`}
+    message={field ? `${field}: ${message}` : message}
     size="sm"
     className={`mt-2 ${className}`}
     showIcon

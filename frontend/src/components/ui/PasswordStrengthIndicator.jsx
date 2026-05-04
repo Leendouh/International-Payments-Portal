@@ -165,7 +165,7 @@ const PasswordStrengthIndicator = ({ password, showRequirements = true }) => {
           {/* Additional Tips */}
           <div className="mt-3 pt-3 border-t border-secondary-200">
             <p className="text-xs text-secondary-500 italic">
-              💡 Tip: Avoid common words, repeated characters, or personal information
+              Tip: Avoid common words, repeated characters, or personal information
             </p>
           </div>
         </div>

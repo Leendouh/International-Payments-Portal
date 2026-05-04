@@ -1,42 +1,67 @@
-const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 
 /**
  * Hashing Utilities
- * Implements secure password hashing and data salting as per Task 1 requirements
+ * Implements secure password hashing and data salting using Node.js built-in crypto
  */
 
-const SALT_ROUNDS = 12; // As specified in requirements (≥12)
+const SALT_ROUNDS = 12; // For compatibility with previous requirements
+const SCRYPT_PARAMS = { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }; // Secure scrypt parameters
 
 /**
- * Hash a password using bcrypt
+ * Hash a password using scrypt (Node.js built-in)
  * @param {string} password - Plain text password
- * @returns {Promise<string>} - Hashed password
+ * @returns {Promise<string>} - Hashed password with salt
  */
 const hashPassword = async (password) => {
-  try {
-    const salt = await bcrypt.genSalt(SALT_ROUNDS);
-    const hash = await bcrypt.hash(password, salt);
-    return hash;
-  } catch (error) {
-    console.error('Password hashing error:', error);
-    throw new Error('Password hashing failed');
-  }
+  return new Promise((resolve, reject) => {
+    // Generate a random salt
+    const salt = crypto.randomBytes(16).toString('hex');
+    
+    crypto.scrypt(password, salt, 64, SCRYPT_PARAMS, (err, derivedKey) => {
+      if (err) {
+        console.error('Password hashing error:', err);
+        reject(new Error('Password hashing failed'));
+        return;
+      }
+      
+      // Combine salt and hash for storage
+      const hash = `${salt}:${derivedKey.toString('hex')}`;
+      resolve(hash);
+    });
+  });
 };
 
 /**
  * Verify a password against its hash
  * @param {string} password - Plain text password
- * @param {string} hash - Hashed password
+ * @param {string} storedHash - Hashed password with salt (format: salt:hash)
  * @returns {Promise<boolean>} - True if password matches
  */
-const verifyPassword = async (password, hash) => {
-  try {
-    return await bcrypt.compare(password, hash);
-  } catch (error) {
-    console.error('Password verification error:', error);
-    return false;
-  }
+const verifyPassword = async (password, storedHash) => {
+  return new Promise((resolve, reject) => {
+    try {
+      const [salt, hash] = storedHash.split(':');
+      if (!salt || !hash) {
+        resolve(false);
+        return;
+      }
+      
+      crypto.scrypt(password, salt, 64, SCRYPT_PARAMS, (err, derivedKey) => {
+        if (err) {
+          console.error('Password verification error:', err);
+          resolve(false);
+          return;
+        }
+        
+        const derivedKeyHex = derivedKey.toString('hex');
+        resolve(derivedKeyHex === hash);
+      });
+    } catch (error) {
+      console.error('Password verification error:', error);
+      resolve(false);
+    }
+  });
 };
 
 /**

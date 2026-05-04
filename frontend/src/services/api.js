@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 
 // Create axios instance with default configuration
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: 'http://localhost:8443/api',
   timeout: 10000,
   withCredentials: true, // Send cookies for session management
   headers: {

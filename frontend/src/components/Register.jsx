@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useFieldValidation } from '../hooks/useFieldValidation';
 import { EmailInput, PasswordInput, NameInput, AccountInput } from './ui/FormInput';
 import { AuthError, SuccessMessage, ValidationError, InfoMessage } from './ui/ErrorMessage';
 import PasswordStrengthIndicator from './ui/PasswordStrengthIndicator';
-import { Shield, UserPlus, CheckCircle, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { Shield, UserPlus, CheckCircle, AlertCircle, Eye, EyeOff, Loader2 } from 'lucide-react';
 import Footer from './Footer';
 
 const Register = () => {
@@ -27,18 +28,23 @@ const Register = () => {
   
   const { register } = useAuth();
   const navigate = useNavigate();
+  
+  // Real-time field validation
+  const {
+    fieldErrors: realtimeErrors,
+    validatingFields,
+    validateField,
+    clearFieldError,
+    getFieldError,
+    isFieldValidating,
+    isFieldValid
+  } = useFieldValidation();
 
   const validateForm = () => {
     const newErrors = {};
 
-    // Full Name validation
-    if (!formData.fullName.trim()) {
-      newErrors.fullName = 'Full name is required';
-    } else if (formData.fullName.length < 2) {
-      newErrors.fullName = 'Full name must be at least 2 characters';
-    } else if (!/^[a-zA-Z\s'-]+$/.test(formData.fullName)) {
-      newErrors.fullName = 'Full name can only contain letters, spaces, hyphens, and apostrophes';
-    }
+    // Full Name validation - completely handled by real-time validation
+    // Real-time validation handles both required and format checking
 
     // Email validation
     if (!formData.email.trim()) {
@@ -115,8 +121,37 @@ const Register = () => {
       }));
     }
     
+    // Clear real-time error when user starts typing
+    if (realtimeErrors[name]) {
+      clearFieldError(name);
+    }
+    
     // Clear general error when user starts typing
     if (error) setError('');
+  };
+
+  // Real-time validation on blur (when user leaves field)
+  const handleFieldBlur = async (fieldName) => {
+    const value = formData[fieldName];
+    
+    // Don't validate empty fields (unless required)
+    if (!value || value.trim().length === 0) {
+      return;
+    }
+
+    let additionalData = null;
+    
+    // For confirm password, pass the original password
+    if (fieldName === 'confirmPassword') {
+      additionalData = formData.password;
+    }
+    
+    // For password, pass confirm password for matching
+    if (fieldName === 'password' && formData.confirmPassword) {
+      additionalData = formData.confirmPassword;
+    }
+
+    await validateField(fieldName, value, additionalData);
   };
 
   const handleSubmit = async (e) => {
@@ -205,30 +240,52 @@ const Register = () => {
             {/* Two Column Layout for Personal Info */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Full Name Input */}
-              <NameInput
-                id="fullName"
-                name="fullName"
-                label="Full Name"
-                value={formData.fullName}
-                onChange={handleChange}
-                required
-                placeholder="John Doe"
-                disabled={loading}
-                error={errors.fullName}
-              />
+              <div className="relative">
+                <NameInput
+                  id="fullName"
+                  name="fullName"
+                  label="Full Name"
+                  value={formData.fullName}
+                  onChange={handleChange}
+                  onBlur={() => handleFieldBlur('fullName')}
+                  required
+                  placeholder="John Doe"
+                  disabled={loading}
+                  error={null}
+                />
+                {isFieldValidating('fullName') && (
+                  <div className="absolute right-3 top-9">
+                    <Loader2 size={16} className="animate-spin text-primary-500" />
+                  </div>
+                )}
+                {getFieldError('fullName') && !errors.fullName && (
+                  <ValidationError message={getFieldError('fullName')} />
+                )}
+              </div>
 
               {/* Email Input */}
-              <EmailInput
-                id="email"
-                name="email"
-                label="Email Address"
-                value={formData.email}
-                onChange={handleChange}
-                required
-                placeholder="you@example.com"
-                disabled={loading}
-                error={errors.email}
-              />
+              <div className="relative">
+                <EmailInput
+                  id="email"
+                  name="email"
+                  label="Email Address"
+                  value={formData.email}
+                  onChange={handleChange}
+                  onBlur={() => handleFieldBlur('email')}
+                  required
+                  placeholder="you@example.com"
+                  disabled={loading}
+                  error={errors.email || getFieldError('email')}
+                />
+                {isFieldValidating('email') && (
+                  <div className="absolute right-3 top-9">
+                    <Loader2 size={16} className="animate-spin text-primary-500" />
+                  </div>
+                )}
+                {getFieldError('email') && !errors.email && (
+                  <ValidationError message={getFieldError('email')} />
+                )}
+              </div>
             </div>
 
             {/* Two Column Layout for ID and Account Number */}
@@ -246,6 +303,7 @@ const Register = () => {
                     name="idNumber"
                     value={formData.idNumber}
                     onChange={handleChange}
+                    onBlur={() => handleFieldBlur('idNumber')}
                     required
                     placeholder="9001015009087"
                     disabled={loading}
@@ -256,21 +314,26 @@ const Register = () => {
                       placeholder:text-secondary-400
                       focus:outline-none focus:ring-2 focus:ring-offset-0
                       disabled:opacity-50 disabled:cursor-not-allowed
-                      pl-12 pr-4
-                      ${errors.idNumber 
+                      pl-12 pr-12
+                      ${(errors.idNumber || getFieldError('idNumber'))
                         ? 'border-error-300 text-error-900 focus:border-error-500 focus:ring-error-500/20 bg-error-50/50' 
                         : 'border-secondary-200 text-secondary-900 hover:border-secondary-300 hover:bg-white/90 focus:border-primary-500 focus:ring-primary-500/20'
                       }
                     `}
                   />
+                  {isFieldValidating('idNumber') && (
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                      <Loader2 size={16} className="animate-spin text-primary-500" />
+                    </div>
+                  )}
                   <div className={`absolute left-3 top-1/2 transform -translate-y-1/2 transition-colors duration-200 ${
                     errors.idNumber ? 'text-error-500' : 'text-secondary-400'
                   }`}>
                     <UserPlus size={20} strokeWidth={2} />
                   </div>
                 </div>
-                {errors.idNumber && (
-                  <ValidationError field="ID Number" message={errors.idNumber} />
+                {(errors.idNumber || getFieldError('idNumber')) && (
+                  <ValidationError message={errors.idNumber || getFieldError('idNumber')} />
                 )}
                 <p className="mt-2 text-xs text-secondary-500 italic">
                   Enter your 13-digit South African ID number
@@ -278,36 +341,58 @@ const Register = () => {
               </div>
 
               {/* Account Number Input */}
-              <AccountInput
-                id="accountNumber"
-                name="accountNumber"
-                label="Account Number"
-                value={formData.accountNumber}
-                onChange={handleChange}
-                required
-                placeholder="1234567890"
-                disabled={loading}
-                error={errors.accountNumber}
-                helperText="Enter your 6-16 digit bank account number"
-              />
+              <div className="relative">
+                <AccountInput
+                  id="accountNumber"
+                  name="accountNumber"
+                  label="Account Number"
+                  value={formData.accountNumber}
+                  onChange={handleChange}
+                  onBlur={() => handleFieldBlur('accountNumber')}
+                  required
+                  placeholder="1234567890"
+                  disabled={loading}
+                  error={errors.accountNumber || getFieldError('accountNumber')}
+                  helperText="Enter your 10-12 digit bank account number"
+                />
+                {isFieldValidating('accountNumber') && (
+                  <div className="absolute right-3 top-9">
+                    <Loader2 size={16} className="animate-spin text-primary-500" />
+                  </div>
+                )}
+                {getFieldError('accountNumber') && !errors.accountNumber && (
+                  <ValidationError message={getFieldError('accountNumber')} />
+                )}
+              </div>
             </div>
 
             {/* Two Column Layout for Passwords */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Password Input */}
               <div className="space-y-3">
-                <PasswordInput
-                  id="password"
-                  name="password"
-                  label="Password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  required
-                  placeholder="Create a strong password"
-                  disabled={loading}
-                  error={errors.password}
-                  showPasswordToggle
-                />
+                <div className="relative">
+                  <PasswordInput
+                    id="password"
+                    name="password"
+                    label="Password"
+                    value={formData.password}
+                    onChange={handleChange}
+                    onBlur={() => handleFieldBlur('password')}
+                    required
+                    placeholder="Create a strong password"
+                    disabled={loading}
+                    error={errors.password || getFieldError('password')}
+                    showPasswordToggle
+                  />
+                  {isFieldValidating('password') && (
+                    <div className="absolute right-12 top-9">
+                      <Loader2 size={16} className="animate-spin text-primary-500" />
+                    </div>
+                  )}
+                </div>
+                {getFieldError('password') && !errors.password && (
+                  <ValidationError message={getFieldError('password')} />
+                )}
               </div>
 
               {/* Confirm Password Input */}
@@ -323,6 +408,7 @@ const Register = () => {
                     name="confirmPassword"
                     value={formData.confirmPassword}
                     onChange={handleChange}
+                    onBlur={() => handleFieldBlur('confirmPassword')}
                     required
                     placeholder="Confirm your password"
                     disabled={loading}
@@ -332,18 +418,23 @@ const Register = () => {
                       placeholder:text-secondary-400
                       focus:outline-none focus:ring-2 focus:ring-offset-0
                       disabled:opacity-50 disabled:cursor-not-allowed
-                      pl-12 pr-12
-                      ${errors.confirmPassword 
+                      pl-12 pr-20
+                      ${(errors.confirmPassword || getFieldError('confirmPassword'))
                         ? 'border-error-300 text-error-900 focus:border-error-500 focus:ring-error-500/20 bg-error-50/50' 
                         : 'border-secondary-200 text-secondary-900 hover:border-secondary-300 hover:bg-white/90 focus:border-primary-500 focus:ring-primary-500/20'
                       }
                     `}
                   />
                   <div className={`absolute left-3 top-1/2 transform -translate-y-1/2 transition-colors duration-200 ${
-                    errors.confirmPassword ? 'text-error-500' : 'text-secondary-400'
+                    (errors.confirmPassword || getFieldError('confirmPassword')) ? 'text-error-500' : 'text-secondary-400'
                   }`}>
                     <Shield size={20} strokeWidth={2} />
                   </div>
+                  {isFieldValidating('confirmPassword') && (
+                    <div className="absolute right-12 top-1/2 transform -translate-y-1/2">
+                      <Loader2 size={16} className="animate-spin text-primary-500" />
+                    </div>
+                  )}
                   <button
                     type="button"
                     onClick={() => togglePasswordVisibility('confirmPassword')}
@@ -351,7 +442,7 @@ const Register = () => {
                       absolute right-3 top-1/2 transform -translate-y-1/2 p-1.5 rounded-lg
                       transition-all duration-200 hover:bg-secondary-100/50 focus:outline-none
                       focus:ring-2 focus:ring-primary-500/20
-                      ${errors.confirmPassword ? 'text-error-500 hover:text-error-600' : 'text-secondary-400 hover:text-secondary-600'}
+                      ${(errors.confirmPassword || getFieldError('confirmPassword')) ? 'text-error-500 hover:text-error-600' : 'text-secondary-400 hover:text-secondary-600'}
                     `}
                     disabled={loading}
                   >
@@ -362,8 +453,8 @@ const Register = () => {
                     )}
                   </button>
                 </div>
-                {errors.confirmPassword && (
-                  <ValidationError field="Password" message={errors.confirmPassword} />
+                {(errors.confirmPassword || getFieldError('confirmPassword')) && (
+                  <ValidationError message={errors.confirmPassword || getFieldError('confirmPassword')} />
                 )}
               </div>
             </div>

@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { auditLog } = require('../utils/logger');
+const { emitSessionExpired, emitSecurityAlert } = require('../utils/websocket');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '8h';
@@ -46,6 +47,10 @@ const authenticateToken = (req, res, next) => {
 // Middleware to verify session from database
 const authenticateSession = async (req, res, next) => {
   const sessionId = req.cookies?.sessionId || req.headers['x-session-id'];
+  
+  console.log('Session check - Cookie sessionId:', req.cookies?.sessionId);
+  console.log('Session check - Header sessionId:', req.headers['x-session-id']);
+  console.log('Session check - All cookies:', req.cookies);
 
   if (!sessionId) {
     auditLog('SESSION_MISSING', null, req.ip, req.get('User-Agent'), {
@@ -79,9 +84,14 @@ const authenticateSession = async (req, res, next) => {
       // Clear the invalid session cookie
       res.clearCookie('sessionId', {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict'
+        secure: false, // Match login cookie settings
+        sameSite: 'lax' // Match login cookie settings
       });
+      
+      // Emit real-time session expiration
+      if (session && session.customer_id) {
+        emitSessionExpired(session.customer_id);
+      }
       
       return res.status(401).json({
         error: 'Session expired or invalid',
@@ -91,12 +101,6 @@ const authenticateSession = async (req, res, next) => {
 
     const session = result.rows[0];
     
-    // Update last activity
-    await db.query(
-      'UPDATE user_sessions SET last_activity = CURRENT_TIMESTAMP WHERE session_id = $1',
-      [sessionId]
-    );
-
     // Optional: IP binding check (basic session jacking protection)
     if (session.ip_address !== req.ip) {
       auditLog('SESSION_IP_MISMATCH', session.customer_id, req.ip, req.get('User-Agent'), {
