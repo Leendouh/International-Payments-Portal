@@ -11,6 +11,7 @@ import PaymentHistory from './components/PaymentHistory';
 import EmployeeLogin from './components/EmployeeLogin';
 import EmployeeDashboard from './components/EmployeeDashboard';
 import EmployeeProfile from './components/EmployeeProfile';
+import TransactionHistory from './components/TransactionHistory';
 import './App.css';
 
 function App() {
@@ -99,17 +100,21 @@ function App() {
           />
           
           {/* Employee Portal Routes */}
-          <Route 
-            path="/employee/login" 
-            element={<EmployeeLogin />} 
+          <Route
+            path="/employee/login"
+            element={<EmployeeLogin />}
           />
-          <Route 
-            path="/employee/dashboard" 
-            element={<EmployeeDashboard />} 
+          <Route
+            path="/employee/dashboard"
+            element={<EmployeeDashboard />}
           />
-          <Route 
-            path="/employee/profile" 
-            element={<EmployeeProfile />} 
+          <Route
+            path="/employee/history"
+            element={<TransactionHistory />}
+          />
+          <Route
+            path="/employee/profile"
+            element={<EmployeeProfile />}
           />
           
           {/* Default Route */}

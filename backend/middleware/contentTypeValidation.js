@@ -9,10 +9,15 @@ const contentTypeValidation = (req, res, next) => {
     return next();
   }
 
+  // Skip validation for authentication and validation endpoints
+  if (req.path.includes('/api/auth/') || req.path.includes('/api/employee/login')) {
+    return next();
+  }
+
   // Validate content-type for POST, PUT, PATCH requests
   if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
     const contentType = req.get('Content-Type');
-    
+
     // Allow JSON content-type
     if (contentType && contentType.includes('application/json')) {
       return next();

@@ -138,9 +138,6 @@ app.use(session({
 // Rate limiting
 app.use(generalLimiter);
 
-// Content-Type validation
-app.use(contentTypeValidation);
-
 // Input sanitization
 app.use(sanitizeInput);
 

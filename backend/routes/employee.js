@@ -7,6 +7,7 @@ const { generalLimiter } = require('../middleware/rateLimiter');
 const { csrfProtection } = require('../middleware/csrf');
 const { body, validationResult } = require('express-validator');
 const { validateInput } = require('../utils/inputWhitelist');
+const { authenticateEmployeeToken, requireRole } = require('../middleware/employeeAuth');
 
 /**
  * Employee Routes
@@ -15,20 +16,8 @@ const { validateInput } = require('../utils/inputWhitelist');
 
 // Employee login validation
 const employeeLoginValidation = [
-  body('username').notEmpty().withMessage('Username is required').custom((value) => {
-    const validation = validateInput(value, 'fullName'); // Use fullName pattern for username
-    if (!validation.isValid) {
-      throw new Error(validation.error);
-    }
-    return true;
-  }),
-  body('password').notEmpty().withMessage('Password is required').custom((value) => {
-    const validation = validateInput(value, 'password');
-    if (!validation.isValid) {
-      throw new Error(validation.error);
-    }
-    return true;
-  })
+  body('username').notEmpty().withMessage('Username is required'),
+  body('password').notEmpty().withMessage('Password is required')
 ];
 
 // POST /api/employee/login - Employee login
@@ -118,7 +107,7 @@ router.get('/pending-transactions',
 
       // Get all pending and approved transactions with customer information
       const result = await db.query(`
-        SELECT 
+        SELECT
           t.id,
           t.customer_id,
           c.full_name as customer_name,
@@ -141,6 +130,67 @@ router.get('/pending-transactions',
       });
     } catch (error) {
       console.error('Get pending transactions error:', error);
+      if (error.name === 'JsonWebTokenError') {
+        return res.status(401).json({ error: 'Invalid token' });
+      }
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+// GET /api/employee/transaction-history - Get all transactions with optional status filter
+router.get('/transaction-history',
+  async (req, res) => {
+    try {
+      // Verify employee token from header
+      const token = req.headers.authorization?.replace('Bearer ', '');
+      if (!token) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-jwt-secret-change-in-production');
+      if (decoded.type !== 'employee') {
+        return res.status(403).json({ error: 'Access denied. Employees only.' });
+      }
+
+      const { status } = req.query;
+
+      // Build query with optional status filter
+      let query = `
+        SELECT
+          t.id,
+          t.customer_id,
+          c.full_name as customer_name,
+          c.email as customer_email,
+          t.amount,
+          t.currency,
+          t.recipient_account as beneficiary_account,
+          t.swift_bic,
+          t.provider,
+          t.status,
+          t.created_at,
+          t.updated_at
+        FROM transactions t
+        JOIN customers c ON t.customer_id = c.id
+      `;
+
+      const params = [];
+
+      if (status && status !== 'all') {
+        query += ' WHERE t.status = $1';
+        params.push(status);
+      }
+
+      query += ' ORDER BY t.created_at DESC';
+
+      const result = await db.query(query, params);
+
+      res.json({
+        transactions: result.rows,
+        count: result.rows.length
+      });
+    } catch (error) {
+      console.error('Get transaction history error:', error);
       if (error.name === 'JsonWebTokenError') {
         return res.status(401).json({ error: 'Invalid token' });
       }
@@ -289,34 +339,10 @@ router.post('/reject/:id',
 
 // Employee creation validation
 const employeeCreationValidation = [
-  body('username').notEmpty().withMessage('Username is required').custom((value) => {
-    const validation = validateInput(value, 'fullName'); // Use fullName pattern for username
-    if (!validation.isValid) {
-      throw new Error(validation.error);
-    }
-    return true;
-  }),
-  body('fullName').notEmpty().withMessage('Full name is required').custom((value) => {
-    const validation = validateInput(value, 'fullName');
-    if (!validation.isValid) {
-      throw new Error(validation.error);
-    }
-    return true;
-  }),
-  body('email').notEmpty().withMessage('Email is required').custom((value) => {
-    const validation = validateInput(value, 'email');
-    if (!validation.isValid) {
-      throw new Error(validation.error);
-    }
-    return true;
-  }),
-  body('password').notEmpty().withMessage('Password is required').custom((value) => {
-    const validation = validateInput(value, 'password');
-    if (!validation.isValid) {
-      throw new Error(validation.error);
-    }
-    return true;
-  }),
+  body('username').notEmpty().withMessage('Username is required'),
+  body('fullName').notEmpty().withMessage('Full name is required'),
+  body('email').notEmpty().withMessage('Email is required'),
+  body('password').notEmpty().withMessage('Password is required'),
   body('role').notEmpty().withMessage('Role is required').custom((value) => {
     if (!['employee', 'manager', 'admin'].includes(value)) {
       throw new Error('Invalid role');

@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { api } from '../services/api';
-import { Shield, LogOut, RefreshCw, CheckCircle, Send, Users, AlertCircle, Clock, XCircle, Eye, X, User, History } from 'lucide-react';
+import { Shield, LogOut, RefreshCw, CheckCircle, Send, Users, AlertCircle, Clock, XCircle, Eye, X, User, History, Filter, ArrowLeft } from 'lucide-react';
 
-export default function EmployeeDashboard() {
+export default function TransactionHistory() {
   const navigate = useNavigate();
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -12,6 +12,7 @@ export default function EmployeeDashboard() {
   const [employee, setEmployee] = useState(null);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('all');
 
   useEffect(() => {
     const token = localStorage.getItem('employeeToken');
@@ -24,15 +25,16 @@ export default function EmployeeDashboard() {
 
     setEmployee(JSON.parse(employeeData));
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    fetchPendingTransactions();
-  }, [navigate]);
+    fetchTransactionHistory();
+  }, [navigate, statusFilter]);
 
-  const fetchPendingTransactions = async () => {
+  const fetchTransactionHistory = async () => {
     try {
-      const response = await api.get('/employee/pending-transactions');
+      const params = statusFilter !== 'all' ? { status: statusFilter } : {};
+      const response = await api.get('/employee/transaction-history', { params });
       setTransactions(response.data.transactions);
     } catch (error) {
-      toast.error('Failed to fetch pending transactions');
+      toast.error('Failed to fetch transaction history');
       console.error('Error:', error);
     } finally {
       setLoading(false);
@@ -43,52 +45,10 @@ export default function EmployeeDashboard() {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await fetchPendingTransactions();
-      toast.success('Transactions refreshed successfully');
+      await fetchTransactionHistory();
+      toast.success('Transaction history refreshed successfully');
     } catch (error) {
-      toast.error('Failed to refresh transactions');
-    }
-  };
-
-  const handleVerify = async (transactionId) => {
-    try {
-      await api.post(`/employee/verify/${transactionId}`);
-      toast.success('Transaction verified successfully', {
-        icon: <CheckCircle className="text-green-500" />
-      });
-      fetchPendingTransactions();
-    } catch (error) {
-      toast.error(error.response?.data?.error || 'Failed to verify transaction', {
-        icon: <AlertCircle className="text-red-500" />
-      });
-    }
-  };
-
-  const handleSubmitToSwift = async (transactionId) => {
-    try {
-      await api.post(`/employee/submit/${transactionId}`);
-      toast.success('Transaction submitted to SWIFT successfully', {
-        icon: <Send className="text-green-500" />
-      });
-      fetchPendingTransactions();
-    } catch (error) {
-      toast.error(error.response?.data?.error || 'Failed to submit transaction', {
-        icon: <AlertCircle className="text-red-500" />
-      });
-    }
-  };
-
-  const handleReject = async (transactionId) => {
-    try {
-      await api.post(`/employee/reject/${transactionId}`);
-      toast.success('Transaction rejected successfully', {
-        icon: <XCircle className="text-red-500" />
-      });
-      fetchPendingTransactions();
-    } catch (error) {
-      toast.error(error.response?.data?.error || 'Failed to reject transaction', {
-        icon: <AlertCircle className="text-red-500" />
-      });
+      toast.error('Failed to refresh transaction history');
     }
   };
 
@@ -109,14 +69,54 @@ export default function EmployeeDashboard() {
     setSelectedTransaction(null);
   };
 
-  const pendingCount = transactions.filter(t => t.status === 'pending').length;
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'approved':
+        return 'bg-green-100 text-green-800 border-green-200';
+      case 'processed':
+        return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'rejected':
+        return 'bg-red-100 text-red-800 border-red-200';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case 'pending':
+        return <Clock size={16} />;
+      case 'approved':
+        return <CheckCircle size={16} />;
+      case 'processed':
+        return <Send size={16} />;
+      case 'rejected':
+        return <XCircle size={16} />;
+      default:
+        return <AlertCircle size={16} />;
+    }
+  };
+
+  const filteredTransactions = statusFilter === 'all' 
+    ? transactions 
+    : transactions.filter(t => t.status === statusFilter);
+
+  const stats = {
+    all: transactions.length,
+    pending: transactions.filter(t => t.status === 'pending').length,
+    approved: transactions.filter(t => t.status === 'approved').length,
+    processed: transactions.filter(t => t.status === 'processed').length,
+    rejected: transactions.filter(t => t.status === 'rejected').length,
+  };
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 via-blue-50 to-slate-200">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading dashboard...</p>
+          <p className="text-gray-600">Loading transaction history...</p>
         </div>
       </div>
     );
@@ -130,11 +130,11 @@ export default function EmployeeDashboard() {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-                <Shield size={32} className="text-white" />
+                <History size={32} className="text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold">Employee Dashboard</h1>
-                <p className="text-sky-100 text-sm">Welcome, {employee?.fullName}</p>
+                <h1 className="text-2xl font-bold">Transaction History</h1>
+                <p className="text-sky-100 text-sm">View all processed transactions</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -147,11 +147,11 @@ export default function EmployeeDashboard() {
                 <span className="hidden sm:inline">Refresh</span>
               </button>
               <button
-                onClick={() => navigate('/employee/history')}
+                onClick={() => navigate('/employee/dashboard')}
                 className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg backdrop-blur-sm transition-all duration-200"
               >
-                <History size={18} />
-                <span className="hidden sm:inline">History</span>
+                <Shield size={18} />
+                <span className="hidden sm:inline">Dashboard</span>
               </button>
               <button
                 onClick={() => navigate('/employee/profile')}
@@ -174,43 +174,62 @@ export default function EmployeeDashboard() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-8">
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-lg p-6 border border-white/20">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-sky-100 rounded-xl">
-                <Clock size={24} className="text-sky-600" />
+        <button
+          onClick={() => navigate('/employee/dashboard')}
+          className="flex items-center gap-2 text-sky-600 hover:text-sky-800 font-medium mb-6 transition-colors group"
+        >
+          <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
+          <span>Back to Dashboard</span>
+        </button>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+          {[
+            { label: 'All', count: stats.all, color: 'sky', icon: History },
+            { label: 'Pending', count: stats.pending, color: 'yellow', icon: Clock },
+            { label: 'Approved', count: stats.approved, color: 'green', icon: CheckCircle },
+            { label: 'Processed', count: stats.processed, color: 'blue', icon: Send },
+            { label: 'Rejected', count: stats.rejected, color: 'red', icon: XCircle },
+          ].map((stat) => (
+            <button
+              key={stat.label}
+              onClick={() => setStatusFilter(stat.label.toLowerCase())}
+              className={`bg-white/95 backdrop-blur-sm rounded-2xl shadow-lg p-4 border border-white/20 transition-all duration-200 hover:shadow-xl ${
+                statusFilter === stat.label.toLowerCase() ? 'ring-2 ring-sky-500' : ''
+              }`}
+            >
+              <div className="flex flex-col items-center gap-2">
+                <div className={`p-2 bg-${stat.color}-100 rounded-xl`}>
+                  <stat.icon size={20} className={`text-${stat.color}-600`} />
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-gray-900">{stat.count}</p>
+                  <p className="text-xs text-gray-500">{stat.label}</p>
+                </div>
               </div>
-              <span className="text-xs font-medium text-sky-600 bg-sky-50 px-2 py-1 rounded-full">
-                Pending
-              </span>
+            </button>
+          ))}
+        </div>
+
+        {/* Filter Bar */}
+        <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-lg p-4 mb-6 border border-white/20">
+          <div className="flex items-center gap-4">
+            <Filter size={20} className="text-gray-500" />
+            <div className="flex items-center gap-2 flex-wrap">
+              {['all', 'pending', 'approved', 'processed', 'rejected'].map((filter) => (
+                <button
+                  key={filter}
+                  onClick={() => setStatusFilter(filter)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                    statusFilter === filter
+                      ? 'bg-sky-600 text-white shadow-md'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {filter.charAt(0).toUpperCase() + filter.slice(1)}
+                </button>
+              ))}
             </div>
-            <h3 className="text-gray-500 text-sm font-medium mb-1">Pending Transactions</h3>
-            <p className="text-4xl font-bold text-gray-900">{pendingCount}</p>
-          </div>
-          <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-lg p-6 border border-white/20">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-purple-100 rounded-xl">
-                <Users size={24} className="text-purple-600" />
-              </div>
-              <span className="text-xs font-medium text-purple-600 bg-purple-50 px-2 py-1 rounded-full capitalize">
-                {employee?.role}
-              </span>
-            </div>
-            <h3 className="text-gray-500 text-sm font-medium mb-1">Your Role</h3>
-            <p className="text-2xl font-bold text-gray-900 capitalize">{employee?.role}</p>
-          </div>
-          <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-lg p-6 border border-white/20">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-green-100 rounded-xl">
-                <Shield size={24} className="text-green-600" />
-              </div>
-              <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">
-                ID
-              </span>
-            </div>
-            <h3 className="text-gray-500 text-sm font-medium mb-1">Employee ID</h3>
-            <p className="text-2xl font-bold text-gray-900">#{employee?.id}</p>
           </div>
         </div>
 
@@ -220,29 +239,31 @@ export default function EmployeeDashboard() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-sky-100 rounded-lg">
-                  <Clock size={20} className="text-sky-600" />
+                  <History size={20} className="text-sky-600" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-semibold text-gray-800">Pending Transactions</h2>
-                  <p className="text-sm text-gray-500">Review and process customer transactions</p>
+                  <h2 className="text-xl font-semibold text-gray-800">
+                    {statusFilter === 'all' ? 'All Transactions' : `${statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)} Transactions`}
+                  </h2>
+                  <p className="text-sm text-gray-500">
+                    Showing {filteredTransactions.length} of {transactions.length} transactions
+                  </p>
                 </div>
               </div>
-              <Link 
-                to="/employee/login"
-                className="text-sky-600 hover:text-sky-800 text-sm font-medium"
-              >
-                ← Back to Login
-              </Link>
             </div>
           </div>
           
-          {transactions.length === 0 ? (
+          {filteredTransactions.length === 0 ? (
             <div className="p-12 text-center">
               <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-4">
-                <CheckCircle size={32} className="text-gray-400" />
+                <History size={32} className="text-gray-400" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-700 mb-2">All caught up!</h3>
-              <p className="text-gray-500">No pending transactions to review at the moment.</p>
+              <h3 className="text-lg font-semibold text-gray-700 mb-2">No transactions found</h3>
+              <p className="text-gray-500">
+                {statusFilter === 'all' 
+                  ? 'No transactions in the system yet.' 
+                  : `No ${statusFilter} transactions found.`}
+              </p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -259,10 +280,13 @@ export default function EmployeeDashboard() {
                       Beneficiary
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                      SWIFT Code
+                      Provider
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                       Status
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      Date
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                       Actions
@@ -270,7 +294,7 @@ export default function EmployeeDashboard() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {transactions.map((transaction) => (
+                  {filteredTransactions.map((transaction) => (
                     <tr key={transaction.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-3">
@@ -294,61 +318,37 @@ export default function EmployeeDashboard() {
                         <div className="text-sm text-gray-900 font-mono">{transaction.beneficiary_account}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm text-gray-900 font-mono">{transaction.swift_bic}</span>
+                        <div className="text-sm text-gray-900">{transaction.provider || 'N/A'}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {transaction.status === 'pending' && (
-                          <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800 border border-yellow-200">
-                            Pending
-                          </span>
-                        )}
-                        {transaction.status === 'approved' && (
-                          <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 border border-green-200">
-                            Approved
-                          </span>
-                        )}
+                        <span className={`px-3 py-1 inline-flex items-center gap-1 text-xs leading-5 font-semibold rounded-full border ${getStatusColor(transaction.status)}`}>
+                          {getStatusIcon(transaction.status)}
+                          {transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">
+                          {new Date(transaction.created_at).toLocaleDateString('en-ZA', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                          })}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {new Date(transaction.created_at).toLocaleTimeString('en-ZA', {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleViewDetails(transaction)}
-                            className="flex items-center gap-1 px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors duration-200 shadow-sm hover:shadow"
-                          >
-                            <Eye size={16} />
-                            <span className="hidden sm:inline">View</span>
-                          </button>
-                          {transaction.status === 'pending' && (
-                            <>
-                              {(employee?.role === 'admin' || employee?.role === 'manager') && (
-                                <button
-                                  onClick={() => handleVerify(transaction.id)}
-                                  className="flex items-center gap-1 px-3 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition-colors duration-200 shadow-sm hover:shadow"
-                                >
-                                  <CheckCircle size={16} />
-                                  <span className="hidden sm:inline">Approve</span>
-                                </button>
-                              )}
-                              {employee?.role === 'admin' && (
-                                <button
-                                  onClick={() => handleReject(transaction.id)}
-                                  className="flex items-center gap-1 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 shadow-sm hover:shadow"
-                                >
-                                  <XCircle size={16} />
-                                  <span className="hidden sm:inline">Reject</span>
-                                </button>
-                              )}
-                            </>
-                          )}
-                          {transaction.status === 'approved' && employee?.role === 'admin' && (
-                            <button
-                              onClick={() => handleSubmitToSwift(transaction.id)}
-                              className="flex items-center gap-1 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200 shadow-sm hover:shadow"
-                            >
-                              <Send size={16} />
-                              <span className="hidden sm:inline">Process</span>
-                            </button>
-                          )}
-                        </div>
+                        <button
+                          onClick={() => handleViewDetails(transaction)}
+                          className="flex items-center gap-1 px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors duration-200 shadow-sm hover:shadow"
+                        >
+                          <Eye size={16} />
+                          <span className="hidden sm:inline">View</span>
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -394,7 +394,7 @@ export default function EmployeeDashboard() {
               {/* Transaction Information */}
               <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
                 <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                  <Send size={16} />
+                  <History size={16} />
                   Transaction Information
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -404,17 +404,18 @@ export default function EmployeeDashboard() {
                   </div>
                   <div>
                     <p className="text-xs text-gray-600 mb-1">Status</p>
-                    <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      selectedTransaction.status === 'pending' ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' :
-                      selectedTransaction.status === 'approved' ? 'bg-green-100 text-green-800 border border-green-200' :
-                      'bg-gray-100 text-gray-800 border border-gray-200'
-                    }`}>
+                    <span className={`px-2 py-1 inline-flex items-center gap-1 text-xs leading-5 font-semibold rounded-full border ${getStatusColor(selectedTransaction.status)}`}>
+                      {getStatusIcon(selectedTransaction.status)}
                       {selectedTransaction.status.charAt(0).toUpperCase() + selectedTransaction.status.slice(1)}
                     </span>
                   </div>
                   <div>
                     <p className="text-xs text-gray-600 mb-1">Amount</p>
                     <p className="text-sm font-bold text-gray-900">{selectedTransaction.amount} {selectedTransaction.currency}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1">Provider</p>
+                    <p className="text-sm font-medium text-gray-900">{selectedTransaction.provider || 'N/A'}</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-600 mb-1">Created At</p>
@@ -428,6 +429,20 @@ export default function EmployeeDashboard() {
                       })}
                     </p>
                   </div>
+                  {selectedTransaction.updated_at && (
+                    <div>
+                      <p className="text-xs text-gray-600 mb-1">Updated At</p>
+                      <p className="text-sm font-medium text-gray-900">
+                        {new Date(selectedTransaction.updated_at).toLocaleString('en-ZA', {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 

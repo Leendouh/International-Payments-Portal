@@ -136,21 +136,37 @@ router.post('/register',
       );
       
       const newCustomer = result.rows[0];
-      
+
       await auditLog('CUSTOMER_REGISTERED', newCustomer.id, req.ip, req.get('User-Agent'), {
         email: email,
         fullName: fullName
       });
-      
+
       emitRegistrationSuccess(newCustomer.id, newCustomer.email);
-      
+
+      // Generate JWT token
+      const token = generateToken({
+        id: newCustomer.id,
+        email: newCustomer.email,
+        fullName: newCustomer.full_name
+      });
+
+      // Set JWT token in secure cookie
+      res.cookie('token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+      });
+
       res.status(201).json({
         message: 'Registration successful',
-        customer: {
+        user: {
           id: newCustomer.id,
           fullName: newCustomer.full_name,
           email: newCustomer.email
-        }
+        },
+        token
       });
     } catch (error) {
       console.error('Registration error:', error);
@@ -440,7 +456,7 @@ router.post('/validate/email', async (req, res) => {
 router.post('/validate/idnumber', async (req, res) => {
   try {
     const { idNumber } = req.body;
-    
+
     if (!idNumber) {
       return res.status(400).json({
         error: 'ID number is required'
@@ -455,14 +471,23 @@ router.post('/validate/idnumber', async (req, res) => {
     }
 
     // Check if ID number already exists
-    const existingUser = await db.query(
-      'SELECT id FROM customers WHERE id_number_hash = $1',
-      [hashWithSalt(idNumber, 'fixed_salt').hash]
-    );
+    try {
+      const idHash = hashWithSalt(idNumber, 'fixed_salt').hash;
+      const existingUser = await db.query(
+        'SELECT id FROM customers WHERE id_hash = $1',
+        [idHash]
+      );
 
-    if (existingUser.rows.length > 0) {
-      return res.status(409).json({
-        error: 'ID number already exists'
+      if (existingUser.rows.length > 0) {
+        return res.status(409).json({
+          error: 'ID number already exists'
+        });
+      }
+    } catch (dbError) {
+      console.error('Database query error:', dbError);
+      return res.status(500).json({
+        error: 'Database error',
+        details: dbError.message
       });
     }
 
@@ -470,7 +495,8 @@ router.post('/validate/idnumber', async (req, res) => {
   } catch (error) {
     console.error('ID number validation error:', error);
     res.status(500).json({
-      error: 'Validation failed'
+      error: 'Validation failed',
+      details: error.message
     });
   }
 });
@@ -479,7 +505,7 @@ router.post('/validate/idnumber', async (req, res) => {
 router.post('/validate/accountnumber', async (req, res) => {
   try {
     const { accountNumber } = req.body;
-    
+
     if (!accountNumber) {
       return res.status(400).json({
         error: 'Account number is required'
@@ -494,14 +520,23 @@ router.post('/validate/accountnumber', async (req, res) => {
     }
 
     // Check if account number already exists
-    const existingUser = await db.query(
-      'SELECT id FROM customers WHERE account_number_hash = $1',
-      [hashWithSalt(accountNumber, 'fixed_salt').hash]
-    );
+    try {
+      const accountHash = hashWithSalt(accountNumber, 'fixed_salt').hash;
+      const existingUser = await db.query(
+        'SELECT id FROM customers WHERE account_number_hash = $1',
+        [accountHash]
+      );
 
-    if (existingUser.rows.length > 0) {
-      return res.status(409).json({
-        error: 'Account number already exists'
+      if (existingUser.rows.length > 0) {
+        return res.status(409).json({
+          error: 'Account number already exists'
+        });
+      }
+    } catch (dbError) {
+      console.error('Database query error:', dbError);
+      return res.status(500).json({
+        error: 'Database error',
+        details: dbError.message
       });
     }
 
@@ -509,7 +544,8 @@ router.post('/validate/accountnumber', async (req, res) => {
   } catch (error) {
     console.error('Account number validation error:', error);
     res.status(500).json({
-      error: 'Validation failed'
+      error: 'Validation failed',
+      details: error.message
     });
   }
 });
@@ -571,10 +607,10 @@ router.get('/csrf-token', csrfToken, (req, res) => {
 });
 
 // GET /api/profile - Get user profile (protected)
-router.get('/profile', requireAuth, async (req, res) => {
+router.get('/profile', authenticateToken, async (req, res) => {
   try {
     const db = require('../utils/database');
-    
+
     const result = await db.query(
       'SELECT id, full_name, email, created_at FROM customers WHERE id = $1',
       [req.user.id]
