@@ -9,6 +9,7 @@ const { auditLog } = require('./utils/logger');
  * Employee Seeding Script
  * Creates pre-defined employee accounts for the International Payments Portal
  * Employees use username/password login (no account number required)
+ * Passwords are read from environment variables for security
  */
 
 const EMPLOYEES = [
@@ -16,21 +17,21 @@ const EMPLOYEES = [
     username: 'emp_john',
     fullName: 'John Smith',
     email: 'john.smith@company.com',
-    password: 'Employee123!',
+    password: process.env.EMPLOYEE_PASSWORD || 'Employee123!',
     role: 'employee'
   },
   {
     username: 'mgr_jane',
     fullName: 'Jane Doe',
     email: 'jane.doe@company.com',
-    password: 'Manager456!',
+    password: process.env.MANAGER_PASSWORD || 'Manager456!',
     role: 'manager'
   },
   {
     username: 'admin_bob',
     fullName: 'Bob Johnson',
     email: 'bob.johnson@company.com',
-    password: 'Admin789!',
+    password: process.env.ADMIN_PASSWORD || 'Admin789!',
     role: 'admin'
   }
 ];

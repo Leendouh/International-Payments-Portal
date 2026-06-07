@@ -78,10 +78,29 @@ app.use(helmet({
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
 }));
 
-// HTTPS redirect middleware
+// HTTPS redirect middleware with host header validation
+const ALLOWED_HOSTS = [
+  'localhost:3000',
+  'localhost:8443',
+  '192.168.18.23:3000',
+  '192.168.18.23:8443',
+  process.env.ALLOWED_HOST || ''
+].filter(Boolean);
+
 app.use((req, res, next) => {
   if (!req.secure && process.env.NODE_ENV === 'production') {
-    return res.redirect(301, `https://${req.headers.host}${req.url}`);
+    const host = req.headers.host;
+
+    // Validate host header against allowlist
+    if (!ALLOWED_HOSTS.includes(host)) {
+      console.error('Invalid host header in redirect:', host);
+      return res.status(400).json({
+        error: 'Invalid host header',
+        code: 'INVALID_HOST'
+      });
+    }
+
+    return res.redirect(301, `https://${host}${req.url}`);
   }
   next();
 });

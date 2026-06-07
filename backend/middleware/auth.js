@@ -47,10 +47,14 @@ const authenticateToken = (req, res, next) => {
 // Middleware to verify session from database
 const authenticateSession = async (req, res, next) => {
   const sessionId = req.cookies?.sessionId || req.headers['x-session-id'];
-  
-  console.log('Session check - Cookie sessionId:', req.cookies?.sessionId);
-  console.log('Session check - Header sessionId:', req.headers['x-session-id']);
-  console.log('Session check - All cookies:', req.cookies);
+
+  // Log only metadata, not sensitive session data
+  console.log('Session authentication attempted', {
+    path: req.path,
+    method: req.method,
+    hasCookieSession: !!req.cookies?.sessionId,
+    hasHeaderSession: !!req.headers['x-session-id']
+  });
 
   if (!sessionId) {
     auditLog('SESSION_MISSING', null, req.ip, req.get('User-Agent'), {
