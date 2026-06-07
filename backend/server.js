@@ -19,6 +19,7 @@ const { csrfProtection, csrfToken } = require('./middleware/csrf');
 const { generalLimiter } = require('./middleware/rateLimiter');
 const { sanitizeInput } = require('./middleware/inputValidation');
 const securityHeaders = require('./middleware/securityHeaders');
+const contentTypeValidation = require('./middleware/contentTypeValidation');
 
 // Import utilities
 const db = require('./utils/database');
@@ -46,7 +47,9 @@ const SSL_OPTIONS = {
     'ECDHE-ECDSA-CHACHA20-POLY1305',
     'ECDHE-RSA-CHACHA20-POLY1305'
   ].join(':'),
-  honorCipherOrder: true
+  honorCipherOrder: true,
+  // Enable HTTP/2
+  allowHTTP1: true
 };
 
 // Security middleware
@@ -74,6 +77,14 @@ app.use(helmet({
   xssFilter: true,
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
 }));
+
+// HTTPS redirect middleware
+app.use((req, res, next) => {
+  if (!req.secure && process.env.NODE_ENV === 'production') {
+    return res.redirect(301, `https://${req.headers.host}${req.url}`);
+  }
+  next();
+});
 
 app.use(securityHeaders);
 
@@ -126,6 +137,9 @@ app.use(session({
 
 // Rate limiting
 app.use(generalLimiter);
+
+// Content-Type validation
+app.use(contentTypeValidation);
 
 // Input sanitization
 app.use(sanitizeInput);

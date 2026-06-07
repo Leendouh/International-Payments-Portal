@@ -6,6 +6,7 @@ const db = require('../utils/database');
 const { generalLimiter } = require('../middleware/rateLimiter');
 const { csrfProtection } = require('../middleware/csrf');
 const { body, validationResult } = require('express-validator');
+const { validateInput } = require('../utils/inputWhitelist');
 
 /**
  * Employee Routes
@@ -14,8 +15,20 @@ const { body, validationResult } = require('express-validator');
 
 // Employee login validation
 const employeeLoginValidation = [
-  body('username').notEmpty().withMessage('Username is required'),
-  body('password').notEmpty().withMessage('Password is required')
+  body('username').notEmpty().withMessage('Username is required').custom((value) => {
+    const validation = validateInput(value, 'fullName'); // Use fullName pattern for username
+    if (!validation.isValid) {
+      throw new Error(validation.error);
+    }
+    return true;
+  }),
+  body('password').notEmpty().withMessage('Password is required').custom((value) => {
+    const validation = validateInput(value, 'password');
+    if (!validation.isValid) {
+      throw new Error(validation.error);
+    }
+    return true;
+  })
 ];
 
 // POST /api/employee/login - Employee login
@@ -274,9 +287,54 @@ router.post('/reject/:id',
   }
 );
 
+// Employee creation validation
+const employeeCreationValidation = [
+  body('username').notEmpty().withMessage('Username is required').custom((value) => {
+    const validation = validateInput(value, 'fullName'); // Use fullName pattern for username
+    if (!validation.isValid) {
+      throw new Error(validation.error);
+    }
+    return true;
+  }),
+  body('fullName').notEmpty().withMessage('Full name is required').custom((value) => {
+    const validation = validateInput(value, 'fullName');
+    if (!validation.isValid) {
+      throw new Error(validation.error);
+    }
+    return true;
+  }),
+  body('email').notEmpty().withMessage('Email is required').custom((value) => {
+    const validation = validateInput(value, 'email');
+    if (!validation.isValid) {
+      throw new Error(validation.error);
+    }
+    return true;
+  }),
+  body('password').notEmpty().withMessage('Password is required').custom((value) => {
+    const validation = validateInput(value, 'password');
+    if (!validation.isValid) {
+      throw new Error(validation.error);
+    }
+    return true;
+  }),
+  body('role').notEmpty().withMessage('Role is required').custom((value) => {
+    if (!['employee', 'manager', 'admin'].includes(value)) {
+      throw new Error('Invalid role');
+    }
+    return true;
+  })
+];
+
 // POST /api/employee/create - Create new employee (admin only)
 router.post('/create',
-  employeeLoginValidation,
+  employeeCreationValidation,
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+    next();
+  },
   async (req, res) => {
     try {
       // Verify employee token from header
