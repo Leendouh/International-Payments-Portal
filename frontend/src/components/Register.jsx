@@ -179,7 +179,8 @@ const Register = () => {
       }, 2000);
     } catch (error) {
       if (error.response?.data?.error) {
-        setError(error.response.data.error);
+        // Display generic error message for security
+        setError('Registration failed. Please check your information and try again.');
       } else {
         setError('An unexpected error occurred. Please try again.');
       }

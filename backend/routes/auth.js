@@ -74,63 +74,50 @@ const router = express.Router();
  */
 
 // POST /api/register - Customer registration
-router.post('/register', 
+router.post('/register',
   registrationLimiter,
   csrfProtection,
   registrationValidation,
   handleValidationErrors,
   async (req, res) => {
-    console.log('Registration request body:', req.body);
     const { fullName, idNumber, accountNumber, email, password } = req.body;
 
     try {
       const db = require('../utils/database');
       
-      // Enhanced password validation
-      const userInfo = { fullName, email, idNumber, accountNumber };
-      const passwordValidation = validatePassword(password, userInfo);
-      
-      if (!passwordValidation.isValid) {
-        await auditLog('REGISTRATION_FAILED_WEAK_PASSWORD', null, req.ip, req.get('User-Agent'), {
-          email,
-          errors: passwordValidation.errors,
-          strengthScore: passwordValidation.strengthScore
-        });
-        return res.status(400).json({
-          error: 'Password does not meet security requirements',
-          code: 'WEAK_PASSWORD',
-          details: passwordValidation.errors,
-          strength: {
-            score: passwordValidation.strengthScore,
-            label: passwordValidation.strengthLabel
-          }
-        });
-      }
-
-      // Check if user already exists
-      const existingUser = await db.query(
+      // Check if email already exists
+      const existingEmail = await db.query(
         'SELECT id FROM customers WHERE email = $1',
         [email]
       );
-
-      if (existingUser.rows.length > 0) {
-        await auditLog('REGISTRATION_FAILED_EMAIL_EXISTS', null, req.ip, req.get('User-Agent'), {
-          email,
-          reason: 'Email already registered'
-        });
-        return res.status(409).json({
-          error: 'An account with this email already exists. Please try logging in or use a different email address.',
+      
+      if (existingEmail.rows.length > 0) {
+        return res.status(400).json({
+          error: 'Email already registered',
           code: 'EMAIL_EXISTS'
         });
       }
-
-      // Hash the password with enhanced security
+      
+      // Check if account number already exists
+      const existingAccount = await db.query(
+        'SELECT id FROM customers WHERE account_number_hash = $1',
+        [hashAccountNumber(accountNumber).hash]
+      );
+      
+      if (existingAccount.rows.length > 0) {
+        return res.status(400).json({
+          error: 'Account number already registered',
+          code: 'ACCOUNT_EXISTS'
+        });
+      }
+      
+      // Hash the password with scrypt
       const passwordHash = await hashPassword(password);
       
       // Hash sensitive data (ID number and account number)
       const idHashData = hashIdNumber(idNumber);
       const accountHashData = hashAccountNumber(accountNumber);
-
+      
       // Insert new customer
       const result = await db.query(
         `INSERT INTO customers 
@@ -147,57 +134,30 @@ router.post('/register',
           passwordHash
         ]
       );
-
+      
       const newCustomer = result.rows[0];
-
+      
       await auditLog('CUSTOMER_REGISTERED', newCustomer.id, req.ip, req.get('User-Agent'), {
-        email,
-        fullName
+        email: email,
+        fullName: fullName
       });
-
-      // Generate JWT token
-      const token = generateToken({
-        id: newCustomer.id,
-        email: newCustomer.email,
-        fullName: newCustomer.full_name
-      });
-
-      // Emit real-time registration success
-      emitRegistrationSuccess(newCustomer.id, {
-        id: newCustomer.id,
-        fullName: newCustomer.full_name,
-        email: newCustomer.email
-      });
-
-      // Set JWT token in secure cookie
-      res.cookie('token', token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
-      });
-
+      
+      emitRegistrationSuccess(newCustomer.id, newCustomer.email);
+      
       res.status(201).json({
         message: 'Registration successful',
-        user: {
+        customer: {
           id: newCustomer.id,
           fullName: newCustomer.full_name,
           email: newCustomer.email
-        },
-        token
+        }
       });
-
     } catch (error) {
       console.error('Registration error:', error);
       await auditLog('REGISTRATION_ERROR', null, req.ip, req.get('User-Agent'), {
-        email,
         error: error.message
       });
-      
-      res.status(500).json({
-        error: 'Registration failed',
-        code: 'REGISTRATION_ERROR'
-      });
+      res.status(500).json({ error: 'Internal server error' });
     }
   }
 );

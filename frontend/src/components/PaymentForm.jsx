@@ -78,7 +78,8 @@ const PaymentForm = () => {
       toast.success('Payment initiated successfully!');
       navigate('/history');
     } catch (error) {
-      // Error is handled by the API interceptor
+      // Display generic error message for security
+      toast.error('Payment failed. Please check your information and try again.');
       console.error('Payment creation failed:', error);
     } finally {
       setIsLoading(false);

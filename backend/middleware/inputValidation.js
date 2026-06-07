@@ -91,7 +91,7 @@ const registrationValidation = [
 
 const loginValidation = [
   // Enhanced email validation with whitelist
-  body('email').custom((value) => {
+  body('email').notEmpty().withMessage('Email is required').custom((value) => {
     const validation = validateInput(value, 'email');
     if (!validation.isValid) {
       throw new Error(validation.error);
@@ -100,7 +100,7 @@ const loginValidation = [
   }),
   
   // Enhanced account number validation with whitelist
-  body('accountNumber').custom((value) => {
+  body('accountNumber').notEmpty().withMessage('Account number is required').custom((value) => {
     const validation = validateInput(value, 'accountNumber');
     if (!validation.isValid) {
       throw new Error(validation.error);
@@ -109,7 +109,7 @@ const loginValidation = [
   }),
   
   // Enhanced password validation with whitelist
-  body('password').custom((value) => {
+  body('password').notEmpty().withMessage('Password is required').custom((value) => {
     const validation = validateInput(value, 'password');
     if (!validation.isValid) {
       throw new Error(validation.error);
@@ -178,7 +178,11 @@ const sanitizeInput = (req, res, next) => {
   if (req.body) {
     const validation = validateMultipleInputs(req.body, {});
     if (validation.sanitizedInputs) {
-      req.body = validation.sanitizedInputs;
+      // Only replace body if sanitization produced a valid result
+      // Otherwise preserve the original body
+      if (Object.keys(validation.sanitizedInputs).length > 0) {
+        req.body = validation.sanitizedInputs;
+      }
     }
   }
   next();
@@ -213,21 +217,6 @@ const handleValidationErrors = (req, res, next) => {
   next();
 };
 
-module.exports = {
-  registrationValidation,
-  loginValidation,
-  paymentValidation,
-  enhancedRegistrationValidation,
-  enhancedLoginValidation,
-  enhancedPaymentValidation,
-  sanitizeInput,
-  validateSAId,
-  handleValidationErrors,
-  schemas,
-  validateInput,
-  validateMultipleInputs
-};
-
 // Custom validator for SWIFT/BIC codes (optional enhanced validation)
 const validateSwiftBic = (bic) => {
   // Basic format validation (already done above)
@@ -244,7 +233,14 @@ module.exports = {
   registrationValidation,
   loginValidation,
   paymentValidation,
-  handleValidationErrors,
+  enhancedRegistrationValidation,
+  enhancedLoginValidation,
+  enhancedPaymentValidation,
+  sanitizeInput,
   validateSAId,
-  validateSwiftBic
+  validateSwiftBic,
+  handleValidationErrors,
+  schemas,
+  validateInput,
+  validateMultipleInputs
 };

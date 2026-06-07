@@ -42,13 +42,14 @@ class WebSocketService {
 
     console.log('🔌 Connecting to real-time WebSocket service...');
     
-    this.socket = io('http://localhost:8443', {
+    this.socket = io('https://192.168.18.23:8443', {
       withCredentials: true,
       transports: ['websocket', 'polling'],
       timeout: 10000,
       reconnection: true,
       reconnectionAttempts: this.maxReconnectAttempts,
-      reconnectionDelay: this.reconnectDelay
+      reconnectionDelay: this.reconnectDelay,
+      rejectUnauthorized: false // Allow self-signed certificates in development
     });
 
     // Connection events

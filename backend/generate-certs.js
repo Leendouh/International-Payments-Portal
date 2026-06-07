@@ -39,8 +39,16 @@ const opts = {
           value: 'localhost',
         },
         {
+          type: 2, // DNS
+          value: '192.168.18.23',
+        },
+        {
           type: 7, // IP
           ip: '127.0.0.1',
+        },
+        {
+          type: 7, // IP
+          ip: '192.168.18.23',
         },
       ],
     },

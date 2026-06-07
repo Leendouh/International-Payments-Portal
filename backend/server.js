@@ -1,157 +1,150 @@
-// Load environment variables from .env file
-require('dotenv').config();
-
 const express = require('express');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const cors = require('cors');
+const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
+const session = require('express-session');
+const { createServer } = require('http');
+const { Server } = require('socket.io');
+const dotenv = require('dotenv');
+
+// Load environment variables
+dotenv.config();
 
 // Import middleware
-const securityHeaders = require('./middleware/securityHeaders');
+const { authenticateSession, requireAuth } = require('./middleware/auth');
+const { csrfProtection, csrfToken } = require('./middleware/csrf');
 const { generalLimiter } = require('./middleware/rateLimiter');
-const { requestLogger } = require('./utils/logger');
+const { sanitizeInput } = require('./middleware/inputValidation');
+const securityHeaders = require('./middleware/securityHeaders');
 
-// Import enhanced security modules
-const { 
-  createSecureServer, 
-  sslSecurityHeaders, 
-  monitorCertificate,
-  validateSSLConfig 
-} = require('./utils/sslSecurity');
-const { 
-  initializeAttackProtection,
-  attackProtection,
-  getAttackStatistics
-} = require('./utils/attackProtection');
+// Import utilities
+const db = require('./utils/database');
+const { auditLog } = require('./utils/logger');
+const { initializeWebSocket } = require('./utils/websocket');
 
 // Import routes
 const authRoutes = require('./routes/auth');
 const paymentRoutes = require('./routes/payments');
+const employeeRoutes = require('./routes/employee');
 
-// Import database
-const { initializeDatabase } = require('./utils/database');
-
-// Import WebSocket service
-const { initializeWebSocket, getActiveConnections } = require('./utils/websocket');
-
-/**
- * Main Server Application
- * Implements secure HTTPS server with all security controls
- */
-
+// Initialize Express app
 const app = express();
-const PORT = process.env.PORT || 8443;
 
-// Initialize database
-initializeDatabase().catch(error => {
-  console.error('❌ Database initialization failed:', error);
-});
+// SSL Configuration
+const SSL_OPTIONS = {
+  key: fs.readFileSync(path.join(__dirname, '../certs/key.pem')),
+  cert: fs.readFileSync(path.join(__dirname, '../certs/cert.pem')),
+  minVersion: 'TLSv1.2',
+  ciphers: [
+    'ECDHE-ECDSA-AES128-GCM-SHA256',
+    'ECDHE-RSA-AES128-GCM-SHA256',
+    'ECDHE-ECDSA-AES256-GCM-SHA384',
+    'ECDHE-RSA-AES256-GCM-SHA384',
+    'ECDHE-ECDSA-CHACHA20-POLY1305',
+    'ECDHE-RSA-CHACHA20-POLY1305'
+  ].join(':'),
+  honorCipherOrder: true
+};
 
-// Initialize attack protection system
-initializeAttackProtection();
-
-// Enhanced security middleware stack
-app.use(attackProtection({
-  ipProtection: {
-    maxRequestsPerMinute: 60,
-    maxRequestsPerHour: 1000,
-    geoBlocking: {
-      enabled: true,
-      allowedCountries: ['ZA', 'US', 'GB', 'CA', 'AU'],
-      blockedCountries: ['CN', 'RU', 'KP', 'IR']
-    }
+// Security middleware
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", "https:"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"],
+    },
   },
-  anomalyDetection: {
-    enabled: true,
-    patterns: {
-      bruteForce: { maxAttempts: 5, windowMs: 15 * 60 * 1000 },
-      credentialStuffing: { maxAttempts: 20, windowMs: 60 * 60 * 1000 },
-      ddos: { maxRequests: 1000, windowMs: 60 * 1000 },
-      scanning: { maxUniquePaths: 50, windowMs: 30 * 60 * 1000 },
-      injection: { maxSuspiciousPatterns: 10, windowMs: 10 * 60 * 1000 }
-    }
-  }
-}));
-
-app.use(sslSecurityHeaders({
-  hsts: 'max-age=31536000; includeSubDomains; preload',
-  enablePinning: true,
-  expectCT: true
+  hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true
+  },
+  noSniff: true,
+  frameguard: { action: 'deny' },
+  xssFilter: true,
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
 }));
 
 app.use(securityHeaders);
-app.use(generalLimiter);
-app.use(requestLogger);
-
-// Cookie parsing middleware (MUST come before CORS)
-app.use(cookieParser());
-
-// Debug middleware to log all incoming cookies
-app.use((req, res, next) => {
-  console.log('Incoming request cookies:', req.cookies);
-  console.log('Incoming request headers - Cookie:', req.get('Cookie'));
-  
-  // Intercept response to log outgoing headers
-  const originalEnd = res.end;
-  res.end = function(...args) {
-    console.log('Outgoing response headers:', res.getHeaders());
-    originalEnd.apply(this, args);
-  };
-  
-  next();
-});
 
 // CORS configuration
-const corsOptions = {
+const allowedOrigins = [
+  'http://localhost:3000',
+  'https://localhost:3000',
+  'http://192.168.18.23:3000',
+  'https://192.168.18.23:3000'
+];
+
+app.use(cors({
   origin: function (origin, callback) {
-    console.log('CORS Request Origin:', origin);
-    console.log('FRONTEND_URL env var:', process.env.FRONTEND_URL);
-    
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
-    // Allow localhost and network IP for development
-    const allowedOrigins = [
-      'https://localhost:3000',
-      'http://localhost:3000',
-      'https://192.168.18.23:3000',
-      'http://192.168.18.23:3000'
-    ];
-    
-    if (allowedOrigins.includes(origin)) {
-      console.log('CORS: Allowing origin:', origin);
-      return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
     }
-    
-    console.log('CORS: Blocking origin:', origin);
-    callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
-  optionsSuccessStatus: 200
-};
-app.use(cors(corsOptions));
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token']
+}));
 
 // Body parsing middleware
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+app.use(cookieParser());
 
-// Trust proxy for getting real IP addresses
-app.set('trust proxy', 1);
+// Session configuration
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your-session-secret-change-in-production',
+  name: 'sessionId',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  },
+  store: new (require('connect-pg-simple')(session))({
+    pool: db.pool,
+    tableName: 'user_sessions'
+  })
+}));
 
-// Root endpoint
-app.get('/', (req, res) => {
-  res.json({
-    message: 'International Payments Portal Backend',
-    status: 'running',
-    endpoints: {
-      health: '/health',
-      api: '/api',
-      documentation: '/api'
-    },
-    security: 'HTTPS with TLS 1.2/1.3 enabled'
+// Rate limiting
+app.use(generalLimiter);
+
+// Input sanitization
+app.use(sanitizeInput);
+
+// Request logging middleware
+app.use(async (req, res, next) => {
+  const startTime = Date.now();
+  
+  res.on('finish', async () => {
+    const duration = Date.now() - startTime;
+    await auditLog('HTTP_REQUEST', req.user?.id, req.ip, req.get('User-Agent'), {
+      method: req.method,
+      path: req.path,
+      statusCode: res.statusCode,
+      duration
+    });
   });
+  
+  next();
 });
 
 // Health check endpoint
@@ -159,227 +152,107 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    version: '1.0.0'
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
 // API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/employee', employeeRoutes);
 
-// API documentation endpoint
-app.get('/api', (req, res) => {
+// CSRF token endpoint
+app.get('/api/csrf-token', csrfToken, (req, res) => {
   res.json({
-    message: 'International Payments Portal API',
-    version: '1.0.0',
-    endpoints: {
-      authentication: {
-        'POST /api/auth/register': 'Register new customer',
-        'POST /api/auth/login': 'Customer login',
-        'POST /api/auth/logout': 'Customer logout',
-        'GET /api/auth/profile': 'Get user profile',
-        'GET /api/auth/csrf-token': 'Get CSRF token'
-      },
-      payments: {
-        'POST /api/payments': 'Create new payment',
-        'GET /api/payments': 'Get payment history',
-        'GET /api/payments/:id': 'Get payment details',
-        'GET /api/payments/currencies/list': 'Get supported currencies',
-        'GET /api/payments/providers/list': 'Get supported providers'
-      }
-    },
-    security: {
-      'All endpoints require HTTPS': true,
-      'CSRF protection': 'Enabled for state-changing requests',
-      'Rate limiting': 'Enabled',
-      'Input validation': 'Whitelist-based validation',
-      'Session security': 'HttpOnly, Secure, SameSite cookies'
-    }
+    csrfToken: req.csrfToken()
   });
 });
 
 // 404 handler
-app.use('*', (req, res) => {
+app.use((req, res) => {
   res.status(404).json({
     error: 'Endpoint not found',
-    code: 'NOT_FOUND',
-    path: req.originalUrl
+    code: 'NOT_FOUND'
   });
 });
 
 // Global error handler
-app.use((error, req, res, next) => {
-  console.error('Global error handler:', error);
+app.use(async (err, req, res, next) => {
+  console.error('Global error handler:', err);
   
-  // Log the error
-  const { errorLog } = require('./utils/logger');
-  errorLog(error, {
-    method: req.method,
-    url: req.url,
-    ip: req.ip,
-    userAgent: req.get('User-Agent')
+  await auditLog('GLOBAL_ERROR', req.user?.id, req.ip, req.get('User-Agent'), {
+    error: err.message,
+    stack: err.stack,
+    path: req.path,
+    method: req.method
   });
-
-  // Don't leak error details in production
-  const isDevelopment = process.env.NODE_ENV !== 'production';
   
-  res.status(error.status || 500).json({
-    error: isDevelopment ? error.message : 'Internal server error',
-    code: 'INTERNAL_ERROR',
-    ...(isDevelopment && { stack: error.stack })
+  res.status(err.status || 500).json({
+    error: err.message || 'Internal server error',
+    code: err.code || 'INTERNAL_ERROR'
   });
 });
 
-// Enhanced SSL certificate configuration with fallback
-let sslOptions = null;
-let useHTTPS = false;
+// Create HTTPS server
+const httpsServer = https.createServer(SSL_OPTIONS, app);
 
-// Try to load SSL certificates
-const sslKeyPath = path.join(__dirname, '../ssl/server.key');
-const sslCertPath = path.join(__dirname, '../ssl/server.crt');
-const fallbackKeyPath = path.join(__dirname, '../certs/key.pem');
-const fallbackCertPath = path.join(__dirname, '../certs/cert.pem');
-
-try {
-  const keyPath = fs.existsSync(sslKeyPath) ? sslKeyPath : fallbackKeyPath;
-  const certPath = fs.existsSync(sslCertPath) ? sslCertPath : fallbackCertPath;
-  
-  if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
-    sslOptions = {
-      key: fs.readFileSync(keyPath),
-      cert: fs.readFileSync(certPath),
-      
-      // Enhanced SSL/TLS configuration
-      minVersion: 'TLSv1.2',
-      maxVersion: 'TLSv1.3',
-      honorCipherOrder: true,
-      ciphers: [
-        'TLS_AES_256_GCM_SHA384',
-        'TLS_CHACHA20_POLY1305_SHA256',
-        'TLS_AES_128_GCM_SHA256',
-        'ECDHE-RSA-AES256-GCM-SHA384',
-        'ECDHE-RSA-CHACHA20-POLY1305',
-        'ECDHE-RSA-AES128-GCM-SHA256',
-        'ECDHE-ECDSA-AES256-GCM-SHA384',
-        'ECDHE-ECDSA-CHACHA20-POLY1305',
-        'ECDHE-ECDSA-AES128-GCM-SHA256'
-      ].join(':'),
-      
-      // Secure options
-      secureOptions: require('crypto').constants.SSL_OP_NO_SSLv3 |
-                     require('crypto').constants.SSL_OP_NO_TLSv1 |
-                     require('crypto').constants.SSL_OP_NO_TLSv1_1 |
-                     require('crypto').constants.SSL_OP_CIPHER_SERVER_PREFERENCE,
-      
-      // ECDH curve
-      ecdhCurve: 'X25519:P-256:P-384:P-521',
-      
-      // Session settings
-      sessionTimeout: 300,
-      requestCert: false,
-      rejectUnauthorized: false
-    };
-    useHTTPS = true;
-    console.log('✅ SSL certificates loaded successfully');
-  } else {
-    console.log('⚠️  SSL certificates not found, running in HTTP mode for development');
-  }
-} catch (error) {
-  console.log('⚠️  Failed to load SSL certificates, running in HTTP mode for development:', error.message);
-}
-
-// Validate SSL configuration only if SSL is available
-let sslValidation = { isValid: true, issues: [], recommendations: [] };
-if (sslOptions) {
-  sslValidation = validateSSLConfig(sslOptions);
-  if (!sslValidation.isValid) {
-    console.warn('SSL Configuration Issues:', sslValidation.issues);
-    console.warn('Recommendations:', sslValidation.recommendations);
-  }
-  
-  // Monitor certificate expiry
-  monitorCertificate(
-    path.join(__dirname, '../ssl/server.crt'),
-    path.join(__dirname, '../ssl/server.key'),
-    {
-      daysBeforeExpiry: 30,
-      onExpiryWarning: (daysUntilExpiry, certInfo) => {
-        console.warn(`⚠️  Certificate expires in ${daysUntilExpiry} days!`);
-        // Send notification to admin team
-      }
-    }
-  );
-}
-
-// Create server (HTTP or HTTPS)
-let server;
-// For development, use HTTP but keep SSL ready for production
-const http = require('http');
-server = http.createServer(app);
-console.log('⚠️  Running in HTTP mode for development - SSL configured for production!');
-
-// Attack statistics monitoring
-setInterval(() => {
-  const stats = getAttackStatistics();
-  if (stats.blockedRequests > 0 || stats.suspiciousIPs > 0) {
-    console.log('�️  Attack Protection Statistics:', {
-      totalRequests: stats.totalRequests,
-      blockedRequests: stats.blockedRequests,
-      suspiciousIPs: stats.suspiciousIPs,
-      blockedIPs: stats.blockedIPs
-    });
-  }
-}, 5 * 60 * 1000); // Every 5 minutes
+// Setup WebSocket (initializeWebSocket creates its own Server instance)
+const io = initializeWebSocket(httpsServer);
 
 // Start server
-server.listen(PORT, () => {
-  console.log('🛡️  Attack protection features enabled:');
-  console.log('   - Attack detection & prevention');
-  console.log('   - IP-based protection');
-  console.log('   - Anomaly detection');
-  console.log('   - Geo-blocking');
-  console.log('   - CSRF protection');
-  console.log('   - Rate limiting');
-  console.log('   - Input validation & sanitization');
-  console.log('   - Security headers');
-  console.log('   - Real-time threat detection');
-  console.log('   - Account lockout with countdown');
-  console.log('🔌 Real-time WebSocket service initialized');
-  
-  // Initialize WebSocket service
-  const io = initializeWebSocket(server);
-  
-  // Log active connections periodically
-  setInterval(() => {
-    const activeConnections = getActiveConnections();
-    if (activeConnections > 0) {
-      console.log(`📊 Active real-time connections: ${activeConnections}`);
-    }
-  }, 30000); // Log every 30 seconds
-});
+const PORT = process.env.PORT || 8443;
 
-// Log server start
-const { auditLog } = require('./utils/logger');
-auditLog('SERVER_STARTED', null, '127.0.0.1', 'Server', {
-  port: PORT,
-  environment: process.env.NODE_ENV || 'development'
-});
+const startServer = async () => {
+  try {
+    // Initialize database connection
+    await db.initializeDatabase();
+    console.log('Database connected successfully');
+    
+    // Start HTTPS server
+    httpsServer.listen(PORT, '0.0.0.0', () => {
+      console.log(`🔒 Secure HTTPS server running on port ${PORT}`);
+      console.log(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`🔐 SSL/TLS enabled with TLSv1.2+`);
+      console.log(`🛡️ Security features active:`);
+      console.log(`   - Helmet.js headers`);
+      console.log(`   - CSRF protection`);
+      console.log(`   - Rate limiting`);
+      console.log(`   - Input whitelisting`);
+      console.log(`   - Password hashing (scrypt)`);
+      console.log(`   - Session management`);
+      console.log(`   - Audit logging`);
+      console.log(`   - WebSocket real-time updates`);
+    });
+    
+    // Graceful shutdown
+    process.on('SIGTERM', async () => {
+      console.log('SIGTERM received, shutting down gracefully...');
+      httpsServer.close(() => {
+        console.log('HTTPS server closed');
+        db.pool.end(() => {
+          console.log('Database pool closed');
+          process.exit(0);
+        });
+      });
+    });
+    
+    process.on('SIGINT', async () => {
+      console.log('SIGINT received, shutting down gracefully...');
+      httpsServer.close(() => {
+        console.log('HTTPS server closed');
+        db.pool.end(() => {
+          console.log('Database pool closed');
+          process.exit(0);
+        });
+      });
+    });
+    
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+};
 
-// Graceful shutdown
-process.on('SIGINT', () => {
-  console.log('\n🛑 Shutting down server...');
-  server.close(() => {
-    console.log('✅ Server closed gracefully');
-    process.exit(0);
-  });
-});
+startServer();
 
-process.on('SIGTERM', () => {
-  console.log('\n🛑 Shutting down server...');
-  server.close(() => {
-    console.log('✅ Server closed gracefully');
-    process.exit(0);
-  });
-});
-
-module.exports = app;
+module.exports = { app, httpsServer, io };

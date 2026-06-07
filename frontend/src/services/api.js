@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 
 // Create axios instance with default configuration
 const api = axios.create({
-  baseURL: 'http://localhost:8443/api',
+  baseURL: 'https://192.168.18.23:8443/api',
   timeout: 10000,
   withCredentials: true, // Send cookies for session management
   headers: {
@@ -43,7 +43,7 @@ api.interceptors.response.use(
       switch (status) {
         case 401:
           // Unauthorized - only redirect if not on login page and it's a session issue
-          if (window.location.pathname !== '/login' && data.code !== 'AUTH_REQUIRED') {
+          if (window.location.pathname !== '/login' && window.location.pathname !== '/employee/login' && data.code !== 'AUTH_REQUIRED') {
             toast.error('Session expired. Please login again.');
             window.location.href = '/login';
           }
@@ -88,7 +88,6 @@ api.interceptors.response.use(
 // Authentication API calls
 export const authAPI = {
   login: (credentials) => api.post('/auth/login', credentials),
-  register: (userData) => api.post('/auth/register', userData),
   logout: () => api.post('/auth/logout'),
   getProfile: () => api.get('/auth/profile'),
   getCsrfToken: () => api.get('/auth/csrf-token'),

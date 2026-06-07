@@ -7,11 +7,11 @@ const { Pool } = require('pg');
 
 // Database configuration
 const dbConfig = {
-  host: process.env.DB_HOST,
-  port: process.env.DB_PORT,
-  database: process.env.DB_NAME,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
+  host: process.env.DB_HOST || 'localhost',
+  port: parseInt(process.env.DB_PORT) || 5432,
+  database: process.env.DB_NAME || 'international_payments',
+  user: process.env.DB_USER || 'postgres',
+  password: process.env.DB_PASSWORD || '',
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
   max: 20, // Maximum number of clients in the pool
   idleTimeoutMillis: 30000, // How long a client is allowed to remain idle before being closed
@@ -38,6 +38,13 @@ const testConnection = async () => {
     return true;
   } catch (error) {
     console.error('Database connection failed:', error.message);
+    console.error('Database config:', {
+      host: dbConfig.host,
+      port: dbConfig.port,
+      database: dbConfig.database,
+      user: dbConfig.user,
+      passwordSet: !!dbConfig.password
+    });
     const { errorLog } = require('./logger');
     errorLog(error, { context: 'Database connection test' });
     return false;

@@ -1,5 +1,281 @@
 # International Payments Portal
 
+A secure employee international payments portal with comprehensive security implementations including password hashing, input whitelisting, SSL/TLS, and protection against common web attacks.
+
+## Security Features
+
+### Password Security [20 Marks]
+- **scrypt Hashing**: Passwords hashed using Node.js crypto.scrypt with 12 salt rounds
+- **Random Salts**: Each password uses a unique random salt
+- **Strong Password Policy**: Minimum 12 characters, mixed case, numbers, special characters
+- **No Password Storage**: Only salted hashes stored in database
+
+### DevSecOps Pipeline [30 Marks]
+- **CircleCI Integration**: Automated CI/CD pipeline
+- **SonarQube Analysis**: Code quality, security hotspots, code smells detection
+- **Automated Testing**: Unit tests with coverage reports
+- **Security Auditing**: npm audit for vulnerability detection
+
+### Static Login [10 Marks]
+- **No Registration**: User registration disabled (403 Forbidden)
+- **Static User Creation**: Users created via admin seed script only
+- **Pre-defined Users**: Three test users with secure credentials
+
+### Overall Functionality [20 Marks]
+- **React Frontend**: Modern React application with routing
+- **Secure API**: Express.js backend with comprehensive middleware
+- **Payment Management**: Create and view international payments
+- **Real-time Updates**: WebSocket-based security notifications
+
+## Attack Protections
+
+1. **SQL Injection**: Parameterized queries with PostgreSQL
+2. **XSS**: Helmet.js, CSP headers, input sanitization
+3. **CSRF**: Token-based protection with double-submit pattern
+4. **DDoS**: Multi-level rate limiting
+5. **Brute Force**: Account lockout with countdown timer
+6. **Session Hijacking**: Secure cookies, IP binding
+7. **MitM**: HTTPS/TLS with strong ciphers
+8. **Input Validation**: RegEx whitelisting for all inputs
+9. **Data Protection**: Hashed sensitive data (ID, account numbers)
+10. **Transaction Integrity**: HMAC-SHA256 signing
+
+## Setup Instructions
+
+### Prerequisites
+- Node.js 18+
+- PostgreSQL 12+
+- npm or yarn
+
+### Installation
+
+1. **Clone the repository**
+```bash
+git clone <repository-url>
+cd InternationalPaymentsPortal
+```
+
+2. **Install dependencies**
+```bash
+# Backend
+cd backend
+npm install
+
+# Frontend
+cd ../frontend
+npm install
+```
+
+3. **Configure environment variables**
+```bash
+# Copy example env file
+cp .env.example .env
+
+# Edit .env with your configuration
+# Required: DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD
+# Required: JWT_SECRET, SESSION_SECRET, HMAC_SECRET
+```
+
+4. **Generate SSL certificates**
+```bash
+cd backend
+npm run generate-certs
+```
+
+5. **Initialize database**
+```bash
+# Using the existing init.sql script
+psql -U your_db_user -d your_database_name -f backend/db/init.sql
+
+# Or use the init-database.js script if you prefer
+cd backend
+npm run init-db
+```
+
+6. **Seed static users**
+```bash
+cd backend
+npm run seed-users
+```
+
+### Running the Application
+
+**Start Backend (HTTPS on port 8443)**
+```bash
+cd backend
+npm start
+# Or for development with auto-reload
+npm run dev
+```
+
+**Start Frontend (HTTP on port 3000)**
+```bash
+cd frontend
+npm run dev
+```
+
+**Access the Application**
+- Frontend: http://localhost:3000
+- Backend API: https://localhost:8443
+- Health Check: https://localhost:8443/health
+
+### Test Credentials
+
+| User | Email | Password | Account Number |
+|------|-------|----------|----------------|
+| John Employee | john.employee@company.com | SecureP@ssw0rd123! | 1234567890 |
+| Jane Manager | jane.manager@company.com | ManagerP@ssw0rd456! | 0987654321 |
+| Bob Admin | bob.admin@company.com | AdminP@ssw0rd789! | 1122334455 |
+
+## DevSecOps Pipeline
+
+### CircleCI Configuration
+The project uses CircleCI for continuous integration with SonarQube analysis:
+
+- **Build and Test**: Automated testing with coverage reports
+- **SonarQube Scan**: Code quality and security analysis
+- **Security Audit**: npm audit for vulnerability detection
+
+### SonarQube Setup
+1. Create a SonarCloud account at https://sonarcloud.io
+2. Create a new project and get your project key
+3. Add `SONAR_TOKEN` to CircleCI context
+4. Update `sonar-project.properties` with your project details
+
+## Project Structure
+
+```
+InternationalPaymentsPortal/
+├── backend/
+│   ├── middleware/          # Security middleware (auth, CSRF, rate limiting)
+│   ├── routes/              # API routes (auth, payments)
+│   ├── utils/               # Utilities (hash, database, logger, websocket)
+│   ├── db/                  # Database schema (init.sql)
+│   ├── server.js            # Main server with HTTPS
+│   ├── init-database.js     # Database initialization (alternative to init.sql)
+│   ├── seed-users.js        # Static user seeding
+│   └── generate-certs.js    # SSL certificate generation
+├── frontend/
+│   ├── src/
+│   │   ├── components/      # React components
+│   │   ├── hooks/           # Custom React hooks
+│   │   ├── services/        # API service layer
+│   │   └── App.jsx          # Main application
+│   └── package.json
+├── .circleci/
+│   └── config.yml           # CircleCI pipeline
+├── sonar-project.properties # SonarQube configuration
+├── .env.example             # Environment variables template
+└── README.md
+```
+
+## Security Implementation Details
+
+### Password Hashing
+- Algorithm: scrypt (Node.js crypto module)
+- Salt rounds: 12
+- Derived key length: 64 bytes
+- Memory limit: 64MB
+- Format: `salt:hash`
+
+### Input Whitelisting
+- 20+ input types with specific RegEx patterns
+- Sanitization for XSS, SQL injection, path traversal
+- Length restrictions on all inputs
+- Examples: fullName, email, idNumber, accountNumber, amount, currency, swiftBic
+
+### SSL/TLS Configuration
+- Minimum TLS version: 1.2
+- Cipher suites: ECDHE with AES-GCM and ChaCha20
+- HSTS: Enabled with 1-year max-age
+- Certificate: Self-signed for development
+
+### Rate Limiting
+- General: 1000 requests/15min per IP
+- Authentication: 100 requests/1min per IP
+- Payments: 50 requests/1min per user/IP
+- Password Reset: 3 requests/15min per IP
+
+### Account Lockout
+- Failed attempts threshold: 5
+- Lockout duration: 15 minutes
+- IP-based lockout: Enabled
+- Countdown timer: Provided to user
+
+## API Endpoints
+
+### Authentication
+- `POST /api/auth/login` - User login
+- `POST /api/auth/logout` - User logout
+- `POST /api/auth/register` - Registration (disabled - static users only)
+- `GET /api/auth/profile` - Get user profile
+- `GET /api/auth/csrf-token` - Get CSRF token
+
+### Payments
+- `POST /api/payments` - Create payment
+- `GET /api/payments` - Get payment history
+- `GET /api/payments/:id` - Get payment details
+- `GET /api/payments/currencies/list` - Get supported currencies
+- `GET /api/payments/providers/list` - Get supported providers
+
+### Health
+- `GET /health` - Health check endpoint
+
+## Testing
+
+### Run Tests
+```bash
+# Backend tests
+cd backend
+npm test
+
+# Frontend tests
+cd frontend
+npm test
+```
+
+### Run Linting
+```bash
+# Backend linting
+cd backend
+npm run lint
+
+# Frontend linting
+cd frontend
+npm run lint
+```
+
+### Security Audit
+```bash
+# Backend audit
+cd backend
+npm audit
+
+# Frontend audit
+cd frontend
+npm audit
+```
+
+## Video Demonstration
+
+For the assignment submission, create a video demonstrating:
+1. Application setup and configuration
+2. User login with static credentials
+3. Payment creation process
+4. Payment history viewing
+5. Security features (rate limiting, CSRF protection, etc.)
+6. DevSecOps pipeline execution
+
+Recommended tools: OBS Studio, upload unlisted to YouTube
+
+## License
+
+MIT
+
+## Author
+
+Secure Development Team
+
 A secure customer-facing international payments portal built with React and Node.js, implementing comprehensive security controls as specified in Task 1 requirements.
 
 ## 🛡️ Security Features Implemented

@@ -38,7 +38,6 @@ body::before {
   min-height: 100vh;
   position: relative;
   z-index: 1;
-  padding-top: 80px; /* Account for fixed navbar */
 }
 
 /* Container */

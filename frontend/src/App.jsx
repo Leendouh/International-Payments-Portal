@@ -8,6 +8,9 @@ import Register from './components/Register';
 import Dashboard from './components/Dashboard';
 import PaymentForm from './components/PaymentForm';
 import PaymentHistory from './components/PaymentHistory';
+import EmployeeLogin from './components/EmployeeLogin';
+import EmployeeDashboard from './components/EmployeeDashboard';
+import EmployeeProfile from './components/EmployeeProfile';
 import './App.css';
 
 function App() {
@@ -27,35 +30,94 @@ function App() {
   return (
     <Router>
       <div className="min-h-screen bg-gray-50">
-        <Navbar />
-        <main className="container mx-auto px-4 py-8">
-          <Routes>
-            <Route 
-              path="/login" 
-              element={user ? <Navigate to="/dashboard" /> : <Login />} 
-            />
-            <Route 
-              path="/register" 
-              element={user ? <Navigate to="/dashboard" /> : <Register />} 
-            />
-            <Route 
-              path="/dashboard" 
-              element={user ? <Dashboard /> : <Navigate to="/login" />} 
-            />
-            <Route 
-              path="/payment" 
-              element={user ? <PaymentForm /> : <Navigate to="/login" />} 
-            />
-            <Route 
-              path="/history" 
-              element={user ? <PaymentHistory /> : <Navigate to="/login" />} 
-            />
-            <Route 
-              path="/" 
-              element={<Navigate to={user ? "/dashboard" : "/login"} />} 
-            />
-          </Routes>
-        </main>
+        <Routes>
+          {/* Customer Portal Routes */}
+          <Route 
+            path="/login" 
+            element={
+              user ? <Navigate to="/dashboard" /> : (
+                <>
+                  <Navbar />
+                  <main className="container mx-auto px-4 py-8">
+                    <Login />
+                  </main>
+                </>
+              )
+            } 
+          />
+          <Route 
+            path="/register" 
+            element={
+              user ? <Navigate to="/dashboard" /> : (
+                <>
+                  <Navbar />
+                  <main className="container mx-auto px-4 py-8">
+                    <Register />
+                  </main>
+                </>
+              )
+            } 
+          />
+          <Route 
+            path="/dashboard" 
+            element={
+              user ? (
+                <div className="pt-20">
+                  <Navbar />
+                  <main className="container mx-auto px-4 py-8">
+                    <Dashboard />
+                  </main>
+                </div>
+              ) : <Navigate to="/login" />
+            } 
+          />
+          <Route 
+            path="/payment" 
+            element={
+              user ? (
+                <div className="pt-20">
+                  <Navbar />
+                  <main className="container mx-auto px-4 py-8">
+                    <PaymentForm />
+                  </main>
+                </div>
+              ) : <Navigate to="/login" />
+            } 
+          />
+          <Route 
+            path="/history" 
+            element={
+              user ? (
+                <div className="pt-20">
+                  <Navbar />
+                  <main className="container mx-auto px-4 py-8">
+                    <PaymentHistory />
+                  </main>
+                </div>
+              ) : <Navigate to="/login" />
+            } 
+          />
+          
+          {/* Employee Portal Routes */}
+          <Route 
+            path="/employee/login" 
+            element={<EmployeeLogin />} 
+          />
+          <Route 
+            path="/employee/dashboard" 
+            element={<EmployeeDashboard />} 
+          />
+          <Route 
+            path="/employee/profile" 
+            element={<EmployeeProfile />} 
+          />
+          
+          {/* Default Route */}
+          <Route 
+            path="/" 
+            element={<Navigate to="/login" />} 
+          />
+        </Routes>
         <Toaster 
           position="top-right"
           toastOptions={{

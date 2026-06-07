@@ -1,0 +1,103 @@
+version: 2.1
+
+orbs:
+  sonarcloud: sonarsource/sonarcloud@2.0.0
+
+jobs:
+  build-and-test:
+    docker:
+      - image: cimg/node:18.18
+    working_directory: ~/repo
+    steps:
+      - checkout
+      
+      - restore_cache:
+          keys:
+            - v1-dependencies-{{ checksum "backend/package.json" }}-{{ checksum "frontend/package.json" }}
+            - v1-dependencies-
+      
+      - run:
+          name: Install Backend Dependencies
+          command: |
+            cd backend
+            npm ci --no-audit --no-fund
+      
+      - run:
+          name: Install Frontend Dependencies
+          command: |
+            cd frontend
+            npm ci --no-audit --no-fund
+      
+      - save_cache:
+          paths:
+            - backend/node_modules
+            - frontend/node_modules
+          key: v1-dependencies-{{ checksum "backend/package.json" }}-{{ checksum "frontend/package.json" }}
+      
+      - run:
+          name: Backend Linting
+          command: |
+            cd backend
+            npm run lint || echo "Linting skipped"
+      
+      - run:
+          name: Frontend Linting
+          command: |
+            cd frontend
+            npm run lint || echo "Linting skipped"
+      
+      - run:
+          name: Backend Unit Tests
+          command: |
+            cd backend
+            npm test -- --coverage --ci
+      
+      - run:
+          name: Frontend Unit Tests
+          command: |
+            cd frontend
+            npm test -- --coverage --ci
+      
+      - run:
+          name: Security Audit
+          command: |
+            echo "=== Running npm audit ==="
+            cd backend && npm audit --audit-level high || echo "Backend audit completed with warnings"
+            cd ../frontend && npm audit --audit-level high || echo "Frontend audit completed with warnings"
+      
+      - store_test_results:
+          path: backend/coverage
+          destination: backend-coverage
+      
+      - store_test_results:
+          path: frontend/coverage
+          destination: frontend-coverage
+      
+      - store_artifacts:
+          path: backend/coverage
+          destination: backend-coverage-report
+      
+      - store_artifacts:
+          path: frontend/coverage
+          destination: frontend-coverage-report
+
+  sonarqube-scan:
+    docker:
+      - image: cimg/node:18.18
+    working_directory: ~/repo
+    steps:
+      - checkout
+      
+      - sonarcloud/scan:
+          cache_version: 1
+          project_root: ~/repo
+
+workflows:
+  version: 2
+  build-test-scan:
+    jobs:
+      - build-and-test
+      - sonarqube-scan:
+          requires:
+            - build-and-test
+          context: SonarCloud

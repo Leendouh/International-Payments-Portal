@@ -6,6 +6,9 @@ const path = require('path');
  * Implements comprehensive audit logging as per Task 1 requirements
  */
 
+// Table name for audit logs (matching existing schema)
+const AUDIT_LOG_TABLE = 'audit_log';
+
 // Create logs directory if it doesn't exist
 const logsDir = path.join(__dirname, '../../logs');
 const fs = require('fs');

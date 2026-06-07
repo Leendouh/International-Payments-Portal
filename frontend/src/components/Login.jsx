@@ -79,6 +79,13 @@ const Login = () => {
     e.preventDefault();
     setError('');
     setSuccess('');
+
+    // Client-side validation for empty fields
+    if (!formData.email || !formData.password || !formData.accountNumber) {
+      setError('Please fill in all required fields.');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -88,11 +95,8 @@ const Login = () => {
         navigate('/dashboard');
       }, 1500);
     } catch (error) {
-      if (error.response?.data?.error) {
-        setError(error.response.data.error);
-      } else {
-        setError('An unexpected error occurred. Please try again.');
-      }
+      // Display generic error message for security
+      setError('Login failed. Please check your credentials and try again.');
     } finally {
       setLoading(false);
     }
@@ -247,7 +251,17 @@ const Login = () => {
                 </Link>
               </p>
               
-              <div className="flex items-center justify-center gap-6 text-xs text-secondary-500">
+              <div className="mt-4 pt-4 border-t border-secondary-200">
+                <Link 
+                  to="/employee/login" 
+                  className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 font-medium"
+                >
+                  <Shield size={18} />
+                  Employee Portal
+                </Link>
+              </div>
+              
+              <div className="flex items-center justify-center gap-6 text-xs text-secondary-500 mt-4">
                 <a href="#" className="hover:text-secondary-700 transition-colors">
                   Forgot Password?
                 </a>
