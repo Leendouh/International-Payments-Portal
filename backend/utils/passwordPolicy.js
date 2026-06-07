@@ -3,7 +3,7 @@
  * Implements comprehensive password requirements for exceptional security
  */
 
-const crypto = require('crypto');
+const crypto = require('node:crypto');
 
 // Password complexity requirements
 const PASSWORD_REQUIREMENTS = {

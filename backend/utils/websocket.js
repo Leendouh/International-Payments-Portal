@@ -28,7 +28,7 @@ const initializeWebSocket = (server) => {
     
     // Join user to their personal room for targeted notifications
     socket.on('authenticate', (userData) => {
-      if (userData && userData.userId) {
+      if (userData?.userId) {
         socket.join(`user_${userData.userId}`);
         socket.userId = userData.userId;
         console.log(`👤 User ${userData.userId} authenticated for real-time updates`);

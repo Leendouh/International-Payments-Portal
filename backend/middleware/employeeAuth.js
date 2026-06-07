@@ -8,8 +8,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-jwt-secret-change-in-producti
  */
 
 const authenticateEmployeeToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+  const token = req.headers['authorization']?.split(' ')[1]; // Bearer TOKEN
 
   if (!token) {
     return res.status(401).json({

@@ -6,6 +6,7 @@ Validates security headers implementation
 
 import json
 import sys
+import os
 import requests
 import time
 from urllib.parse import urlparse
@@ -41,9 +42,14 @@ class SecurityHeadersChecker:
         """Check security headers on the target URL"""
         print(f"🔍 Checking security headers for {self.target_url}")
         print("=" * 60)
-        
+
         try:
-            response = requests.get(self.target_url, timeout=10, verify=False)
+            # Enable SSL verification for production security
+            # For development with self-signed certs, provide cert path via environment variable
+            cert_path = os.environ.get('SSL_CERT_PATH')
+            verify_cert = cert_path if cert_path else True
+
+            response = requests.get(self.target_url, timeout=10, verify=verify_cert)
             headers = response.headers
             
             for header, expected_values in self.required_headers.items():

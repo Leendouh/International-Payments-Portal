@@ -20,7 +20,7 @@ const validateSAId = (idNumber) => {
   let alternate = false;
   
   for (let i = idNumber.length - 1; i >= 0; i--) {
-    let digit = parseInt(idNumber.charAt(i), 10);
+    let digit = Number.parseInt(idNumber.charAt(i), 10);
     
     if (alternate) {
       digit *= 2;

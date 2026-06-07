@@ -3,7 +3,7 @@
  * Implements comprehensive account lockout for brute force protection
  */
 
-const crypto = require('crypto');
+const crypto = require('node:crypto');
 
 // Lockout configuration
 const LOCKOUT_CONFIG = {

@@ -1,3 +1,39 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: payments-portal-sa
+  namespace: production
+  annotations:
+    description: "Service account for International Payments Portal with minimal RBAC permissions"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: payments-portal-role
+  namespace: production
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  resourceNames: ["database-credentials", "jwt-secret", "ssl-certificates"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: payments-portal-rolebinding
+  namespace: production
+subjects:
+- kind: ServiceAccount
+  name: payments-portal-sa
+  namespace: production
+roleRef:
+  kind: Role
+  name: payments-portal-role
+  apiGroup: rbac.authorization.k8s.io
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -28,6 +64,8 @@ spec:
         security.scan.status: "passed"
         pod-security-policy: "restricted"
     spec:
+      serviceAccountName: payments-portal-sa
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 1001
@@ -91,9 +129,11 @@ spec:
           requests:
             memory: "256Mi"
             cpu: "250m"
+            ephemeral-storage: "1Gi"
           limits:
             memory: "512Mi"
             cpu: "500m"
+            ephemeral-storage: "2Gi"
         livenessProbe:
           httpGet:
             path: /health

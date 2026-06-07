@@ -1,12 +1,12 @@
 const express = require('express');
-const https = require('https');
-const fs = require('fs');
-const path = require('path');
+const https = require('node:https');
+const fs = require('node:fs');
+const path = require('node:path');
 const cors = require('cors');
 const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
 const session = require('express-session');
-const { createServer } = require('http');
+const { createServer } = require('node:http');
 const { Server } = require('socket.io');
 const dotenv = require('dotenv');
 
@@ -78,49 +78,31 @@ app.use(helmet({
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
 }));
 
-// HTTPS redirect middleware with host header validation
-const ALLOWED_HOSTS = [
-  'localhost:3000',
-  'localhost:8443',
-  '192.168.18.23:3000',
-  '192.168.18.23:8443',
-  process.env.ALLOWED_HOST || ''
-].filter(Boolean);
-
+// HTTPS redirect middleware with fixed base URL
 app.use((req, res, next) => {
   if (!req.secure && process.env.NODE_ENV === 'production') {
-    const host = req.headers.host;
-
-    // Validate host header against allowlist
-    if (!ALLOWED_HOSTS.includes(host)) {
-      console.error('Invalid host header in redirect:', host);
-      return res.status(400).json({
-        error: 'Invalid host header',
-        code: 'INVALID_HOST'
-      });
-    }
-
-    return res.redirect(301, `https://${host}${req.url}`);
+    // Use environment variable for production hostname, not user-controlled host header
+    const productionHost = process.env.PRODUCTION_HOST || 'yourdomain.com';
+    return res.redirect(301, `https://${productionHost}${req.url}`);
   }
   next();
 });
 
 app.use(securityHeaders);
 
-// CORS configuration
+// CORS configuration - use environment variables for origins
 const allowedOrigins = [
   'http://localhost:3000',
   'https://localhost:3000',
-  'http://192.168.18.23:3000',
-  'https://192.168.18.23:3000'
+  ...(process.env.ADDITIONAL_CORS_ORIGINS ? process.env.ADDITIONAL_CORS_ORIGINS.split(',') : [])
 ];
 
 app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) !== -1) {
+
+    if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
@@ -138,7 +120,7 @@ app.use(cookieParser());
 
 // Session configuration
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'your-session-secret-change-in-production',
+  secret: process.env.SESSION_SECRET,
   name: 'sessionId',
   resave: false,
   saveUninitialized: false,

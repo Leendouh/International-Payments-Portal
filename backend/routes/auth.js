@@ -35,7 +35,7 @@ const {
   hashWithSalt 
 } = require('../utils/hash');
 const jwt = require('jsonwebtoken');
-const crypto = require('crypto');
+const crypto = require('node:crypto');
 
 // Generate JWT token
 const generateToken = (payload) => {
@@ -693,7 +693,7 @@ router.get('/generate-password',
     const { length = 16 } = req.query;
     
     try {
-      const password = generateSecurePassword(parseInt(length));
+      const password = generateSecurePassword(Number.parseInt(length));
       const validation = validatePassword(password);
       
       res.json({

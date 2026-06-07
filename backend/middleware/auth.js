@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const { auditLog } = require('../utils/logger');
 const { emitSessionExpired, emitSecurityAlert } = require('../utils/websocket');
+const crypto = require('node:crypto');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '8h';
@@ -12,8 +13,7 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '8h';
 
 // Middleware to verify JWT token
 const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+  const token = req.headers['authorization']?.split(' ')[1]; // Bearer TOKEN
 
   if (!token) {
     auditLog('AUTH_TOKEN_MISSING', null, req.ip, req.get('User-Agent'), {
@@ -93,7 +93,7 @@ const authenticateSession = async (req, res, next) => {
       });
       
       // Emit real-time session expiration
-      if (session && session.customer_id) {
+      if (session?.customer_id) {
         emitSessionExpired(session.customer_id);
       }
       
@@ -148,8 +148,7 @@ const authenticateSession = async (req, res, next) => {
 // Combined authentication (either JWT or session)
 const authenticate = (req, res, next) => {
   // Try JWT first
-  const authHeader = req.headers['authorization'];
-  if (authHeader && authHeader.split(' ')[0] === 'Bearer') {
+  if (req.headers['authorization']?.split(' ')[0] === 'Bearer') {
     return authenticateToken(req, res, next);
   }
   

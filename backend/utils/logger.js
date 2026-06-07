@@ -1,5 +1,5 @@
 const winston = require('winston');
-const path = require('path');
+const path = require('node:path');
 
 /**
  * Logging Utilities
@@ -11,7 +11,7 @@ const AUDIT_LOG_TABLE = 'audit_log';
 
 // Create logs directory if it doesn't exist
 const logsDir = path.join(__dirname, '../../logs');
-const fs = require('fs');
+const fs = require('node:fs');
 if (!fs.existsSync(logsDir)) {
   fs.mkdirSync(logsDir, { recursive: true });
 }

@@ -3,7 +3,7 @@
  * Provides user-friendly lockout information without compromising security
  */
 
-const crypto = require('crypto');
+const crypto = require('node:crypto');
 const { auditLog } = require('./logger');
 
 /**

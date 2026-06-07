@@ -3,7 +3,7 @@
  * Implements multi-layered attack detection and prevention
  */
 
-const crypto = require('crypto');
+const crypto = require('node:crypto');
 const { auditLog } = require('./logger');
 
 // Attack detection configuration
@@ -433,7 +433,7 @@ const validateRequest = (req) => {
   
   // Check request size
   const contentLength = req.get('Content-Length');
-  if (contentLength && parseInt(contentLength) > 10 * 1024 * 1024) { // 10MB
+  if (contentLength && Number.parseInt(contentLength) > 10 * 1024 * 1024) { // 10MB
     return { valid: false, reason: 'Request too large' };
   }
   
@@ -491,7 +491,7 @@ const addSecurityHeaders = (res, req) => {
   );
   
   // HSTS (if HTTPS)
-  if (req && req.protocol === 'https') {
+  if (req?.protocol === 'https') {
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
   }
 };
@@ -576,8 +576,8 @@ const getAttackStatistics = () => {
   let totalRequests = 0;
   let blockedRequests = 0;
   let suspiciousIPs = 0;
-  
-  for (const [ip, data] of ipData.entries()) {
+
+  for (const [, data] of ipData.entries()) {
     if (data.lastSeen > dayAgo) {
       totalRequests += data.requestCount;
       if (data.blocked) {
@@ -604,8 +604,6 @@ const getAttackStatistics = () => {
  * Attack protection middleware
  */
 const attackProtection = (options = {}) => {
-  const config = { ...ATTACK_CONFIG, ...options };
-  
   return (req, res, next) => {
     checkRequest(req, res, next);
   };

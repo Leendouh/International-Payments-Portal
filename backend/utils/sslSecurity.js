@@ -3,9 +3,9 @@
  * Implements comprehensive SSL/TLS security for exceptional protection
  */
 
-const crypto = require('crypto');
-const fs = require('fs');
-const path = require('path');
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const path = require('node:path');
 
 // SSL/TLS Configuration for maximum security
 const SSL_CONFIG = {
@@ -141,7 +141,7 @@ const generateSecureCertificate = (options = {}) => {
  * Create HTTPS server with enhanced SSL configuration
  */
 const createSecureServer = (app, options = {}) => {
-  const https = require('https');
+  const https = require('node:https');
   
   // Check if certificates are provided or exist
   const keyPath = options.key || path.join(__dirname, '../ssl/server.key');
@@ -247,7 +247,7 @@ const generateDHParameters = () => {
   
   // Generate if not exists
   if (!fs.existsSync(dhPath)) {
-    const { execSync } = require('child_process');
+    const { execSync } = require('node:child_process');
     try {
       execSync(`openssl dhparam -out ${dhPath} 2048`, { stdio: 'inherit' });
     } catch (error) {

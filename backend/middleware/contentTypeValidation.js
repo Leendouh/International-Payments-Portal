@@ -19,17 +19,17 @@ const contentTypeValidation = (req, res, next) => {
     const contentType = req.get('Content-Type');
 
     // Allow JSON content-type
-    if (contentType && contentType.includes('application/json')) {
+    if (contentType?.includes('application/json')) {
       return next();
     }
 
     // Allow multipart/form-data for file uploads
-    if (contentType && contentType.includes('multipart/form-data')) {
+    if (contentType?.includes('multipart/form-data')) {
       return next();
     }
 
     // Allow application/x-www-form-urlencoded
-    if (contentType && contentType.includes('application/x-www-form-urlencoded')) {
+    if (contentType?.includes('application/x-www-form-urlencoded')) {
       return next();
     }
 

@@ -107,8 +107,8 @@ router.get('/',
     try {
       const db = require('../utils/database');
       
-      const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 10;
+      const page = Number.parseInt(req.query.page) || 1;
+      const limit = Number.parseInt(req.query.limit) || 10;
       const offset = (page - 1) * limit;
 
       const result = await db.query(
@@ -126,7 +126,7 @@ router.get('/',
         [req.user.id]
       );
 
-      const totalCount = parseInt(countResult.rows[0].count);
+      const totalCount = Number.parseInt(countResult.rows[0].count);
       const totalPages = Math.ceil(totalCount / limit);
 
       res.json({
@@ -155,9 +155,9 @@ router.get('/:id',
   async (req, res) => {
     try {
       const db = require('../utils/database');
-      const transactionId = parseInt(req.params.id);
+      const transactionId = Number.parseInt(req.params.id);
 
-      if (isNaN(transactionId)) {
+      if (Number.isNaN(transactionId)) {
         return res.status(400).json({
           error: 'Invalid transaction ID',
           code: 'INVALID_TRANSACTION_ID'

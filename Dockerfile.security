@@ -1,16 +1,14 @@
 # Multi-stage security-hardened Dockerfile
 FROM node:18-alpine AS base
 
-# Install security tools and dependencies
+# Install security tools and dependencies and create non-root user
 RUN apk add --no-cache \
     ca-certificates \
     tzdata \
     curl \
-    && rm -rf /var/cache/apk/*
-
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
+    && rm -rf /var/cache/apk/* \
+    && addgroup -g 1001 -S nodejs \
+    && adduser -S nodejs -u 1001
 
 # Set working directory
 WORKDIR /app
@@ -77,7 +75,7 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 CMD ["node", "server.js"]
 
 # Security scanner stage
-FROM aquasec/trivy:latest AS security-scan
+FROM aquasec/trivy:0.48.0 AS security-scan
 
 # Scan the production image
 COPY --from=production /app /app

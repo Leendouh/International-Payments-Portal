@@ -3,7 +3,7 @@
  * Implements exceptional input validation with extensive RegEx patterns
  */
 
-const crypto = require('crypto');
+const crypto = require('node:crypto');
 
 // Comprehensive whitelist patterns for different input types
 const WHITELIST_PATTERNS = {
@@ -348,8 +348,8 @@ const validateInput = (input, type, options = {}) => {
   
   // Convert to number if numeric
   if (pattern.numeric) {
-    const numValue = parseFloat(sanitizedInput);
-    if (isNaN(numValue)) {
+    const numValue = Number.parseFloat(sanitizedInput);
+    if (Number.isNaN(numValue)) {
       return {
         isValid: false,
         error: `Invalid numeric value for ${type}`,

@@ -2,15 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import Footer from './Footer';
-import { 
-  ArrowUpRight, 
-  ArrowDownRight, 
-  DollarSign, 
-  Globe, 
-  Shield, 
+import {
+  ArrowUpRight,
+  ArrowDownRight,
+  Globe,
+  Shield,
   Clock,
-  CreditCard,
-  Activity,
   CheckCircle,
   AlertCircle,
   ArrowRight,
@@ -18,10 +15,7 @@ import {
   Lock,
   Eye,
   FileText,
-  Send,
-  TrendingUp,
-  Wallet,
-  PiggyBank
+  Wallet
 } from 'lucide-react';
 
 const Dashboard = () => {
@@ -32,7 +26,6 @@ const Dashboard = () => {
     completedPayments: 0,
     totalAmount: 0
   });
-  const [recentTransactions, setRecentTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -84,8 +77,7 @@ const Dashboard = () => {
           completedPayments,
           totalAmount
         });
-        setRecentTransactions(formattedTransactions);
-        
+
       } catch (error) {
         console.error('Error loading dashboard data:', error);
         // Fallback to default values if API fails
@@ -95,7 +87,6 @@ const Dashboard = () => {
           completedPayments: 0,
           totalAmount: 0
         });
-        setRecentTransactions([]);
       } finally {
         setLoading(false);
       }

@@ -498,8 +498,8 @@ router.get('/stats',
       };
 
       result.rows.forEach(row => {
-        stats[row.role] = parseInt(row.count);
-        stats.total += parseInt(row.count);
+        stats[row.role] = Number.parseInt(row.count);
+        stats.total += Number.parseInt(row.count);
       });
 
       res.json({
