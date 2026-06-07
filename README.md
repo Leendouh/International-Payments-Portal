@@ -84,7 +84,7 @@ The International Payments Portal is a comprehensive financial platform featurin
 
 ```bash
 # Clone the repository
-git clone <https://github.com/Leendouh/International-Payments-Portal.git>
+git clone https://github.com/Leendouh/International-Payments-Portal.git 
 cd InternationalPaymentsPortal
 
 # Install backend dependencies

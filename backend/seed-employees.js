@@ -17,21 +17,21 @@ const EMPLOYEES = [
     username: 'emp_john',
     fullName: 'John Smith',
     email: 'john.smith@company.com',
-    password: process.env.EMPLOYEE_PASSWORD || 'Employee123!',
+    password: process.env.EMPLOYEE_PASSWORD,
     role: 'employee'
   },
   {
     username: 'mgr_jane',
     fullName: 'Jane Doe',
     email: 'jane.doe@company.com',
-    password: process.env.MANAGER_PASSWORD || 'Manager456!',
+    password: process.env.MANAGER_PASSWORD,
     role: 'manager'
   },
   {
     username: 'admin_bob',
     fullName: 'Bob Johnson',
     email: 'bob.johnson@company.com',
-    password: process.env.ADMIN_PASSWORD || 'Admin789!',
+    password: process.env.ADMIN_PASSWORD,
     role: 'admin'
   }
 ];
