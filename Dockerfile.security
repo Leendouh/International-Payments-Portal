@@ -52,14 +52,10 @@ FROM base AS production
 # Copy source code
 COPY --chown=nodejs:nodejs . .
 
-# Build application
-RUN npm run build
-
-# Security scanning
-RUN npm audit --audit-level high
-
-# Change ownership to non-root user
-RUN chown -R nodejs:nodejs /app
+# Build application, security scanning, and change ownership
+RUN npm run build && \
+    npm audit --audit-level high && \
+    chown -R nodejs:nodejs /app
 
 # Switch to non-root user
 USER nodejs

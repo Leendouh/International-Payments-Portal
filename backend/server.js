@@ -91,18 +91,18 @@ app.use((req, res, next) => {
 app.use(securityHeaders);
 
 // CORS configuration - use environment variables for origins
-const allowedOrigins = [
+const allowedOrigins = new Set([
   'http://localhost:3000',
   'https://localhost:3000',
   ...(process.env.ADDITIONAL_CORS_ORIGINS ? process.env.ADDITIONAL_CORS_ORIGINS.split(',') : [])
-];
+]);
 
 app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
 
-    if (allowedOrigins.includes(origin)) {
+    if (allowedOrigins.has(origin)) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));

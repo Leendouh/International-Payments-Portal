@@ -28,7 +28,7 @@ const WHITELIST_PATTERNS = {
   },
   
   idNumber: {
-    pattern: /^[0-9]{8,13}$/,
+    pattern: /^\d{8,13}$/,
     description: 'ID number with 8-13 digits',
     examples: ['1234567890123', '87654321'],
     maxLength: 13,
@@ -37,7 +37,7 @@ const WHITELIST_PATTERNS = {
   },
   
   accountNumber: {
-    pattern: /^[0-9]{8,20}$/,
+    pattern: /^\d{8,20}$/,
     description: 'Bank account number with 8-20 digits',
     examples: ['1234567890', '98765432109876543210'],
     maxLength: 20,
@@ -86,7 +86,7 @@ const WHITELIST_PATTERNS = {
   
   // Security Patterns
   password: {
-    pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{}|;:,.<>?])[A-Za-z\d!@#$%^&*()_+\-=\[\]{}|;:,.<>?]{12,128}$/,
+    pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{}|;:,.<>?])[A-Za-z\d!@#$%^&*()_+\-=[\]{}|;:,.<>?]{12,128}$/,
     description: 'Strong password with mixed case, numbers, and special characters',
     examples: ['StrongP@ssw0rd!', 'MyS3cure#Pass'],
     maxLength: 128,
@@ -105,7 +105,7 @@ const WHITELIST_PATTERNS = {
   },
   
   description: {
-    pattern: /^[a-zA-Z0-9\s.,!?;:'"()\-]{1,200}$/,
+    pattern: /^[a-zA-Z0-9\s.,!?;:'"()-]{1,200}$/,
     description: 'Payment description or reference',
     examples: ['Salary payment', 'Invoice #12345'],
     maxLength: 200,
@@ -134,7 +134,7 @@ const WHITELIST_PATTERNS = {
   
   // Address Patterns
   address: {
-    pattern: /^[a-zA-Z0-9\s.,#\-\/]{5,100}$/,
+    pattern: /^[a-zA-Z0-9\s.,#/-]{5,100}$/,
     description: 'Street address',
     examples: ['123 Main St, Apt 4B', '456 Oak Avenue'],
     maxLength: 100,
@@ -143,7 +143,7 @@ const WHITELIST_PATTERNS = {
   },
   
   city: {
-    pattern: /^[a-zA-Z\s\-']{2,50}$/,
+    pattern: /^[a-zA-Z\s-']{2,50}$/,
     description: 'City name',
     examples: ['New York', 'Los Angeles', "St. John's"],
     maxLength: 50,
@@ -152,7 +152,7 @@ const WHITELIST_PATTERNS = {
   },
   
   postalCode: {
-    pattern: /^[a-zA-Z0-9\s\-]{3,10}$/,
+    pattern: /^[a-zA-Z0-9\s-]{3,10}$/,
     description: 'Postal/ZIP code',
     examples: ['12345', 'SW1A 1AA', '90210-1234'],
     maxLength: 10,
@@ -269,7 +269,7 @@ const sanitizers = {
   
   // Remove path traversal patterns
   removePathTraversal: (input) => {
-    return input.replace(/\.\./g, '').replace(/[\/\\]/g, '');
+    return input.replaceAll('..', '').replace(/[\/\\]/g, '');
   }
 };
 

@@ -248,12 +248,7 @@ const generateDHParameters = () => {
   // Generate if not exists
   if (!fs.existsSync(dhPath)) {
     const { execSync } = require('node:child_process');
-    try {
-      execSync(`openssl dhparam -out ${dhPath} 2048`, { stdio: 'inherit' });
-    } catch (error) {
-      console.warn('Failed to generate DH parameters, using fallback');
-      return null;
-    }
+    execSync(`openssl dhparam -out ${dhPath} 2048`, { stdio: 'inherit' });
   }
   
   return fs.readFileSync(dhPath);
@@ -366,21 +361,17 @@ const validateSSLConfig = (sslOptions) => {
   
   // Check certificate validity
   if (sslOptions.cert && sslOptions.key) {
-    try {
-      const cert = new crypto.X509Certificate(sslOptions.cert);
-      const now = new Date();
-      const notBefore = new Date(cert.validFrom);
-      const notAfter = new Date(cert.validTo);
-      
-      if (now < notBefore) {
-        issues.push('Certificate is not yet valid');
-      }
-      
-      if (now > notAfter) {
-        issues.push('Certificate has expired');
-      }
-    } catch (error) {
-      issues.push('Invalid certificate format');
+    const cert = new crypto.X509Certificate(sslOptions.cert);
+    const now = new Date();
+    const notBefore = new Date(cert.validFrom);
+    const notAfter = new Date(cert.validTo);
+
+    if (now < notBefore) {
+      issues.push('Certificate is not yet valid');
+    }
+
+    if (now > notAfter) {
+      issues.push('Certificate has expired');
     }
   }
   

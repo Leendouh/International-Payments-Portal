@@ -57,20 +57,9 @@ const Dashboard = () => {
           .filter(p => p.status === 'completed')
           .reduce((sum, payment) => {
             // For now, use the amount directly (in a real app, you'd convert currencies)
-            return sum + parseFloat(payment.amount);
+            return sum + Number.parseFloat(payment.amount);
           }, 0);
-        
-        // Format transactions for display
-        const formattedTransactions = payments.slice(0, 4).map(payment => ({
-          id: payment.id,
-          recipient: payment.recipient_account || 'Unknown Recipient',
-          amount: parseFloat(payment.amount),
-          currency: payment.currency,
-          status: payment.status,
-          date: new Date(payment.created_at).toLocaleDateString(),
-          type: payment.provider || 'SWIFT'
-        }));
-        
+
         setStats({
           totalPayments,
           pendingPayments,

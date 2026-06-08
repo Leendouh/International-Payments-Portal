@@ -360,7 +360,7 @@ class ValidationService {
     }
 
     // If confirm password provided, check if they match
-    if (confirmPassword !== null && password !== confirmPassword) {
+    if (confirmPassword != null && password !== confirmPassword) {
       return { valid: false, error: 'Passwords do not match' };
     }
 

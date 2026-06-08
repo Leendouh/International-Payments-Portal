@@ -27,7 +27,7 @@ const ATTACK_CONFIG = {
   anomalyDetection: {
     enabled: true,
     baselinePeriod: 24 * 60 * 60 * 1000, // 24 hours
-    anomalyThreshold: 3.0, // Standard deviations
+    anomalyThreshold: 3, // Standard deviations
     patterns: {
       bruteForce: { maxAttempts: 5, windowMs: 15 * 60 * 1000 },
       credentialStuffing: { maxAttempts: 20, windowMs: 60 * 60 * 1000 },
@@ -69,7 +69,6 @@ const ATTACK_CONFIG = {
 
 // In-memory storage for attack detection (use Redis in production)
 const ipData = new Map();
-const attackPatterns = new Map();
 const suspiciousIPs = new Map();
 const geoIPCache = new Map();
 
@@ -103,13 +102,6 @@ const cleanupOldData = () => {
   for (const [ip, data] of suspiciousIPs.entries()) {
     if (data.until < now) {
       suspiciousIPs.delete(ip);
-    }
-  }
-  
-  // Clean attack patterns
-  for (const [pattern, data] of attackPatterns.entries()) {
-    if (data.lastSeen < cutoff) {
-      attackPatterns.delete(pattern);
     }
   }
 };
@@ -526,7 +518,7 @@ const detectSessionAnomalies = (userId, sessionId, ip, userAgent) => {
   }
   
   // Check for impossible travel (simplified)
-  const lastSession = userSessions[userSessions.length - 2];
+  const lastSession = userSessions.at(-2);
   if (lastSession && lastSession.ip !== ip) {
     const distance = calculateDistance(lastSession.ip, ip);
     const timeDiff = (now - lastSession.lastSeen) / (1000 * 60 * 60); // hours
@@ -591,12 +583,7 @@ const getAttackStatistics = () => {
     totalRequests,
     blockedRequests,
     suspiciousIPs,
-    blockedIPs: suspiciousIPs.size,
-    attackPatterns: Array.from(attackPatterns.entries()).map(([pattern, data]) => ({
-      pattern,
-      count: data.count,
-      lastSeen: data.lastSeen
-    }))
+    blockedIPs: suspiciousIPs.size
   };
 };
 

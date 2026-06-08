@@ -47,6 +47,89 @@ const DICTIONARY_WORDS = new Set([
 const SPECIAL_CHARS = '!@#$%^&*()_+-=[]{}|;:,.<>?';
 
 /**
+ * Validate character type requirements
+ */
+const validateCharacterTypes = (password, errors) => {
+  const uppercaseCount = (password.match(/[A-Z]/g) || []).length;
+  const lowercaseCount = (password.match(/[a-z]/g) || []).length;
+  const numberCount = (password.match(/\d/g) || []).length;
+  const specialCharCount = (password.match(/[!@#$%^&*()_+\-=[\]{}|;:,.<>?]/g) || []).length;
+
+  if (PASSWORD_REQUIREMENTS.requireUppercase && uppercaseCount < PASSWORD_REQUIREMENTS.minUppercase) {
+    errors.push(`Password must contain at least ${PASSWORD_REQUIREMENTS.minUppercase} uppercase letter`);
+  }
+  if (PASSWORD_REQUIREMENTS.requireLowercase && lowercaseCount < PASSWORD_REQUIREMENTS.minLowercase) {
+    errors.push(`Password must contain at least ${PASSWORD_REQUIREMENTS.minLowercase} lowercase letter`);
+  }
+  if (PASSWORD_REQUIREMENTS.requireNumbers && numberCount < PASSWORD_REQUIREMENTS.minNumbers) {
+    errors.push(`Password must contain at least ${PASSWORD_REQUIREMENTS.minNumbers} number`);
+  }
+  if (PASSWORD_REQUIREMENTS.requireSpecialChars && specialCharCount < PASSWORD_REQUIREMENTS.minSpecialChars) {
+    errors.push(`Password must contain at least ${PASSWORD_REQUIREMENTS.minSpecialChars} special character`);
+  }
+};
+
+/**
+ * Check for sequential characters
+ */
+const checkSequentialChars = (password, errors) => {
+  for (let i = 0; i < password.length - 2; i++) {
+    const char1 = password.codePointAt(i);
+    const char2 = password.codePointAt(i + 1);
+    const char3 = password.codePointAt(i + 2);
+
+    if (char2 === char1 + 1 && char3 === char2 + 1) {
+      errors.push('Password must not contain sequential characters (e.g., "abc", "123")');
+      break;
+    }
+  }
+};
+
+/**
+ * Check for common passwords
+ */
+const checkCommonPasswords = (password, errors) => {
+  const lowerPassword = password.toLowerCase();
+  for (const commonPwd of COMMON_PASSWORDS) {
+    if (lowerPassword.includes(commonPwd)) {
+      errors.push('Password must not contain common password patterns');
+      break;
+    }
+  }
+};
+
+/**
+ * Check for personal information in password
+ */
+const checkPersonalInfo = (password, userInfo, errors) => {
+  const personalFields = ['email', 'fullName', 'idNumber', 'accountNumber'];
+  const passwordLower = password.toLowerCase();
+
+  for (const field of personalFields) {
+    if (userInfo[field]) {
+      const fieldValue = userInfo[field].toLowerCase();
+      if (passwordLower.includes(fieldValue) || fieldValue.includes(passwordLower)) {
+        errors.push('Password must not contain personal information');
+        break;
+      }
+    }
+  }
+};
+
+/**
+ * Check for dictionary words in password
+ */
+const checkDictionaryWords = (password, errors) => {
+  const passwordWords = password.toLowerCase().split(/[^a-z]/);
+  for (const word of passwordWords) {
+    if (word.length >= 4 && DICTIONARY_WORDS.has(word)) {
+      errors.push('Password must not contain common dictionary words');
+      break;
+    }
+  }
+};
+
+/**
  * Validate password against comprehensive security policy
  */
 const validatePassword = (password, userInfo = {}) => {
@@ -62,23 +145,7 @@ const validatePassword = (password, userInfo = {}) => {
   }
 
   // Character type requirements
-  const uppercaseCount = (password.match(/[A-Z]/g) || []).length;
-  const lowercaseCount = (password.match(/[a-z]/g) || []).length;
-  const numberCount = (password.match(/[0-9]/g) || []).length;
-  const specialCharCount = (password.match(/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/g) || []).length;
-
-  if (PASSWORD_REQUIREMENTS.requireUppercase && uppercaseCount < PASSWORD_REQUIREMENTS.minUppercase) {
-    errors.push(`Password must contain at least ${PASSWORD_REQUIREMENTS.minUppercase} uppercase letter`);
-  }
-  if (PASSWORD_REQUIREMENTS.requireLowercase && lowercaseCount < PASSWORD_REQUIREMENTS.minLowercase) {
-    errors.push(`Password must contain at least ${PASSWORD_REQUIREMENTS.minLowercase} lowercase letter`);
-  }
-  if (PASSWORD_REQUIREMENTS.requireNumbers && numberCount < PASSWORD_REQUIREMENTS.minNumbers) {
-    errors.push(`Password must contain at least ${PASSWORD_REQUIREMENTS.minNumbers} number`);
-  }
-  if (PASSWORD_REQUIREMENTS.requireSpecialChars && specialCharCount < PASSWORD_REQUIREMENTS.minSpecialChars) {
-    errors.push(`Password must contain at least ${PASSWORD_REQUIREMENTS.minSpecialChars} special character`);
-  }
+  validateCharacterTypes(password, errors);
 
   // Advanced security checks
   if (PASSWORD_REQUIREMENTS.requireNoWhitespace && /\s/.test(password)) {
@@ -87,16 +154,7 @@ const validatePassword = (password, userInfo = {}) => {
 
   // Prevent sequential characters
   if (PASSWORD_REQUIREMENTS.preventSequentialChars) {
-    for (let i = 0; i < password.length - 2; i++) {
-      const char1 = password.charCodeAt(i);
-      const char2 = password.charCodeAt(i + 1);
-      const char3 = password.charCodeAt(i + 2);
-      
-      if (char2 === char1 + 1 && char3 === char2 + 1) {
-        errors.push('Password must not contain sequential characters (e.g., "abc", "123")');
-        break;
-      }
-    }
+    checkSequentialChars(password, errors);
   }
 
   // Prevent repeating characters
@@ -109,39 +167,17 @@ const validatePassword = (password, userInfo = {}) => {
 
   // Check for common passwords
   if (PASSWORD_REQUIREMENTS.preventCommonPasswords) {
-    const lowerPassword = password.toLowerCase();
-    for (const commonPwd of COMMON_PASSWORDS) {
-      if (lowerPassword.includes(commonPwd)) {
-        errors.push('Password must not contain common password patterns');
-        break;
-      }
-    }
+    checkCommonPasswords(password, errors);
   }
 
   // Prevent personal information
   if (PASSWORD_REQUIREMENTS.preventPersonalInfo && userInfo) {
-    const personalFields = ['email', 'fullName', 'idNumber', 'accountNumber'];
-    for (const field of personalFields) {
-      if (userInfo[field]) {
-        const fieldValue = userInfo[field].toLowerCase();
-        const passwordLower = password.toLowerCase();
-        if (passwordLower.includes(fieldValue) || fieldValue.includes(passwordLower)) {
-          errors.push('Password must not contain personal information');
-          break;
-        }
-      }
-    }
+    checkPersonalInfo(password, userInfo, errors);
   }
 
   // Prevent dictionary words
   if (PASSWORD_REQUIREMENTS.preventDictionaryWords) {
-    const passwordWords = password.toLowerCase().split(/[^a-z]/);
-    for (const word of passwordWords) {
-      if (word.length >= 4 && DICTIONARY_WORDS.has(word)) {
-        errors.push('Password must not contain common dictionary words');
-        break;
-      }
-    }
+    checkDictionaryWords(password, errors);
   }
 
   // Calculate password strength score
@@ -173,8 +209,8 @@ const calculatePasswordStrength = (password) => {
   // Character variety contribution (up to 40 points)
   if (/[a-z]/.test(password)) score += 8;
   if (/[A-Z]/.test(password)) score += 8;
-  if (/[0-9]/.test(password)) score += 8;
-  if (/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(password)) score += 8;
+  if (/\d/.test(password)) score += 8;
+  if (/[!@#$%^&*()_+\-=[\]{}|;:,.<>?]/.test(password)) score += 8;
   if (/[^a-zA-Z0-9]/.test(password)) score += 8;
 
   // Complexity contribution (up to 30 points)
@@ -232,7 +268,6 @@ const generateSecurePassword = (length = 16) => {
 const shouldChangePassword = (passwordCreatedAt, lastChangedAt, breachDetected = false) => {
   const now = new Date();
   const passwordAge = now - new Date(passwordCreatedAt);
-  const lastChangeAge = now - new Date(lastChangedAt);
 
   // Force change if breach detected
   if (breachDetected) return { required: true, reason: 'Security breach detected' };

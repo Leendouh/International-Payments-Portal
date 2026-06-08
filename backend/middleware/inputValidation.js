@@ -220,13 +220,9 @@ const handleValidationErrors = (req, res, next) => {
 // Custom validator for SWIFT/BIC codes (optional enhanced validation)
 const validateSwiftBic = (bic) => {
   // Basic format validation (already done above)
-  if (!/^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/.test(bic)) {
-    return false;
-  }
-  
   // In production, you could validate against official SWIFT directory
   // For now, just ensure the format is correct
-  return true;
+  return /^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/.test(bic);
 };
 
 module.exports = {

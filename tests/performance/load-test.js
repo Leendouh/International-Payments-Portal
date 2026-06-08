@@ -28,9 +28,9 @@ const BASE_URL = 'https://localhost:8443';
 
 // Test data - passwords from environment variables for security
 const users = [
-  { email: 'test1@example.com', password: __ENV.TEST_PASSWORD || 'SecureP@ssw0rd123!', accountNumber: '1234567890123456' },
-  { email: 'test2@example.com', password: __ENV.TEST_PASSWORD || 'SecureP@ssw0rd123!', accountNumber: '2345678901234567' },
-  { email: 'test3@example.com', password: __ENV.TEST_PASSWORD || 'SecureP@ssw0rd123!', accountNumber: '3456789012345678' },
+  { email: 'test1@example.com', password: __ENV.TEST_PASSWORD , accountNumber: '1234567890123456' },
+  { email: 'test2@example.com', password: __ENV.TEST_PASSWORD , accountNumber: '2345678901234567' },
+  { email: 'test3@example.com', password: __ENV.TEST_PASSWORD , accountNumber: '3456789012345678' },
 ];
 
 export function setup() {
@@ -155,7 +155,7 @@ function testPaymentProcessing(token, user) {
 function testSecurityEndpoints() {
   // Test password strength endpoint - password from environment variable
   const passwordPayload = {
-    password: __ENV.TEST_PASSWORD || 'TestP@ssw0rd123',
+    password: __ENV.TEST_PASSWORD,
     email: 'test@example.com',
   };
   

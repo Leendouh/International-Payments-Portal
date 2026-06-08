@@ -124,7 +124,7 @@ const verifyHashedData = (plainText, salt, hash) => {
  * @returns {string} - HMAC signature
  */
 const generateHmacSignature = (transactionData, secret) => {
-  const dataString = JSON.stringify(transactionData, Object.keys(transactionData).sort());
+  const dataString = JSON.stringify(transactionData, Object.keys(transactionData).sort((a, b) => a.localeCompare(b)));
   return crypto.createHmac('sha256', secret).update(dataString).digest('hex');
 };
 

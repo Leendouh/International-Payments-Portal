@@ -58,23 +58,39 @@ const generateLockoutNotification = (lockoutInfo, requestContext) => {
  */
 const formatTimeRemaining = (milliseconds) => {
   if (milliseconds <= 0) return 'now';
-  
+
   const totalMinutes = Math.ceil(milliseconds / (1000 * 60));
-  
+
   if (totalMinutes < 1) {
     return 'less than 1 minute';
-  } else if (totalMinutes < 60) {
-    return `${totalMinutes} minute${totalMinutes > 1 ? 's' : ''}`;
-  } else {
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-    
-    if (minutes === 0) {
-      return `${hours} hour${hours > 1 ? 's' : ''}`;
-    } else {
-      return `${hours} hour${hours > 1 ? 's' : ''} and ${minutes} minute${minutes > 1 ? 's' : ''}`;
-    }
   }
+
+  if (totalMinutes < 60) {
+    return formatMinutes(totalMinutes);
+  }
+
+  return formatHoursAndMinutes(totalMinutes);
+};
+
+/**
+ * Format minutes with proper pluralization
+ */
+const formatMinutes = (minutes) => {
+  return `${minutes} minute${minutes > 1 ? 's' : ''}`;
+};
+
+/**
+ * Format hours and minutes with proper pluralization
+ */
+const formatHoursAndMinutes = (totalMinutes) => {
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (minutes === 0) {
+    return `${hours} hour${hours > 1 ? 's' : ''}`;
+  }
+
+  return `${hours} hour${hours > 1 ? 's' : ''} and ${minutes} minute${minutes > 1 ? 's' : ''}`;
 };
 
 /**
