@@ -11,7 +11,7 @@
 
 **Customer Portal** | **Employee Portal** | **Admin Dashboard**
 
-[![Watch Demo](https://img.shields.io/badge/📺-Watch_Demo-red.svg)](https://www.youtube.com/watch?v=YOUR_VIDEO_ID)
+[![Watch on YouTube](https://img.shields.io/badge/📺-Watch_on_YouTube-red.svg)](https://youtu.be/kw44_ZrgOyU)
 
 </div>
 
