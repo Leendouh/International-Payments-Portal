@@ -82,8 +82,9 @@ app.use(helmet({
 app.use((req, res, next) => {
   if (!req.secure && process.env.NODE_ENV === 'production') {
     // Use environment variable for production hostname, not user-controlled host header
-    const productionHost = process.env.PRODUCTION_HOST || 'yourdomain.com';
-    return res.redirect(301, `https://${productionHost}${req.url}`);
+    const productionHost = process.env.PRODUCTION_HOST;
+    // Redirect to fixed path to avoid open redirect vulnerability
+    return res.redirect(301, `https://${productionHost}/`);
   }
   next();
 });
